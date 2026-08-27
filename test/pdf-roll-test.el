@@ -83,6 +83,29 @@
   (should (lookup-key pdf-view-roll-minor-mode-map
                       [remap pdf-view-next-line-or-next-page])))
 
+(defun pdf-roll-test--page-overlay (page window)
+  "Return a new page overlay for PAGE in WINDOW in the current buffer."
+  (let* ((pos (pdf-roll-page-to-pos page))
+         (ov (make-overlay pos (1+ pos))))
+    (overlay-put ov 'category 'pdf-roll)
+    (overlay-put ov 'window window)
+    ov))
+
+(ert-deftest pdf-roll-undisplay-pages-skips-missing-overlay ()
+  "Test that undisplaying a page without an overlay is a no-op.
+The `displayed-pages' a window remembers outlive its overlays, which
+`pdf-roll-initialize' recreates whenever the buffer is reverted, so the
+list can name a page the buffer no longer holds an overlay for -- one
+inside the buffer as well as one past its end."
+  (with-temp-buffer
+    (insert " \n \n \n ")                 ; two pages
+    (let* ((window (selected-window))
+           (first (pdf-roll-test--page-overlay 1 window)))
+      (should-not (pdf-roll-page-overlay 2 window))
+      (should-not (pdf-roll-page-overlay 3 window))
+      (pdf-roll-undisplay-pages '(1 2 3) window)
+      (should (equal (overlay-get first 'display) (get 'pdf-roll 'display))))))
+
 ;;; Provide
 
 (provide 'pdf-roll-test)
