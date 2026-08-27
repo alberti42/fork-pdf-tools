@@ -51,6 +51,8 @@
 (defvar pdf-roll--state nil
   "Local variable that tracks window, point and vscroll to handle changes.")
 
+(defvar pdf-roll--delay-revert)
+
 ;;; Utility Macros and functions
 (defsubst pdf-roll-page-to-pos (page)
   "Get the buffer position displaing PAGE."
@@ -197,7 +199,8 @@ It should be added to `pre-redisplay-functions' buffer locally."
   (with-demoted-errors "Error in image roll pre-redisplay: %S"
     (unless (pdf-roll-page-overlay 1 win)
       (pdf-roll-new-window-function win))
-    (let* ((state (alist-get win pdf-roll--state))
+    (let* ((pdf-roll--delay-revert t)
+           (state (alist-get win pdf-roll--state))
            (pscrolling (memq last-command
                              '(pixel-scroll-precision pixel-scroll-start-momentum
                                pixel-scroll-interpolate-up pixel-scroll-interpolate-down)))
@@ -338,11 +341,13 @@ If PIXELS is non-nil N is number of pixels instead of lines."
 (defun pdf-roll-initialize (&rest _args)
   "Fun to initialize `pdf-view-roll-minor-mode'.
 It is also added to `revert-buffer-function'."
-  (let ((inhibit-read-only t))
-    (erase-buffer)
-    (remove-overlays))
-  (image-mode-window-put 'displayed-pages nil)
-  (pdf-roll-new-window-function))
+  (if pdf-roll--delay-revert
+      (run-at-time 0 nil #'pdf-roll-initialize)
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (remove-overlays))
+    (image-mode-window-put 'displayed-pages nil)
+    (pdf-roll-new-window-function)))
 
 ;;;###autoload
 (define-minor-mode pdf-view-roll-minor-mode
