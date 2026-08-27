@@ -112,7 +112,12 @@ If INHIBIT-SLICE-P is non-nil, disregard `pdf-view-current-slice'."
 (defun pdf-roll-display-page (page window &optional force)
   "Display PAGE in WINDOW.
 With FORCE non-nil display fetch page again even if it is already displayed."
-  (let ((display (overlay-get (pdf-roll-page-overlay page window) 'display)))
+  ;; `pdf-roll-pre-redisplay' binds this as well, over the whole redisplay
+  ;; pass.  It is bound here too because `pdf-roll-scroll-forward' and
+  ;; `pdf-roll-scroll-backward' render as they walk from page to page, and run
+  ;; as commands rather than as part of redisplay.
+  (let ((pdf-roll--delay-revert t)
+        (display (overlay-get (pdf-roll-page-overlay page window) 'display)))
     (if (or force (not display) (eq (car display) 'space))
         (pdf-roll-display-image (pdf-view-create-page page window) page window)
       (cdr (image-display-size display t)))))
