@@ -51,7 +51,9 @@
 (defvar pdf-roll--state nil
   "Local variable that tracks window, point and vscroll to handle changes.")
 
-(defvar pdf-roll--delay-revert)
+(defvar pdf-roll--delay-revert nil
+  "Non-nil while a page render is waiting on the epdfinfo process.
+`pdf-roll-initialize' postpones its work while this is set.")
 
 ;;; Utility Macros and functions
 (defsubst pdf-roll-page-to-pos (page)
@@ -342,7 +344,15 @@ If PIXELS is non-nil N is number of pixels instead of lines."
   "Fun to initialize `pdf-view-roll-minor-mode'.
 It is also added to `revert-buffer-function'."
   (if pdf-roll--delay-revert
-      (run-at-time 0 nil #'pdf-roll-initialize)
+      ;; The timer has to be given the buffer: it runs with whatever buffer
+      ;; happens to be current when it fires, and the work below erases the
+      ;; current one.
+      (let ((buffer (current-buffer)))
+        (run-at-time 0 nil
+                     (lambda ()
+                       (when (buffer-live-p buffer)
+                         (with-current-buffer buffer
+                           (pdf-roll-initialize))))))
     (let ((inhibit-read-only t))
       (erase-buffer)
       (remove-overlays))
