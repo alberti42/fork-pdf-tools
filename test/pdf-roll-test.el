@@ -106,6 +106,28 @@ inside the buffer as well as one past its end."
       (pdf-roll-undisplay-pages '(1 2 3) window)
       (should (equal (overlay-get first 'display) (get 'pdf-roll 'display))))))
 
+(ert-deftest pdf-roll-initialize-postpones-during-a-render ()
+  "Test that a revert arriving during a render leaves the buffer alone.
+`pdf-roll-initialize' is what a revert runs.  While `pdf-roll--delay-revert'
+is set a page render is waiting on the server, and erasing the buffer would
+take away the overlay that render is about to write to, so the work has to
+be queued instead."
+  (with-temp-buffer
+    (insert " \n \n")
+    (let ((overlay (make-overlay 1 2))
+          (timers (length timer-list))
+          (queued nil))
+      (unwind-protect
+          (let ((pdf-roll--delay-revert t))
+            (pdf-roll-initialize)
+            (setq queued (- (length timer-list) timers))
+            ;; The buffer is untouched.
+            (should (= (point-max) 5))
+            (should (overlay-buffer overlay))
+            ;; And the work was put on a timer.
+            (should (= queued 1)))
+        (dotimes (_ queued) (cancel-timer (car (last timer-list))))))))
+
 ;;; Provide
 
 (provide 'pdf-roll-test)
