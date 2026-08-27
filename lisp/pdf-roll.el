@@ -324,25 +324,27 @@ scroll backward instead. With a prefix arg N is its numeric value.
 
 If PIXELS is non-nil N is number of pixels instead of lines."
   (interactive (list (prefix-numeric-value current-prefix-arg)))
-  (setq n (* (or n 1) (if pixels 1 (frame-char-height))))
+  (setq n (or n 1))
   (setq window (or window (selected-window)))
-  (when (> 0 n) (pdf-roll-scroll-backward (- n) window))
-  (let ((pos (goto-char (pdf-roll-window-start window))))
-    (while (let* ((data (pos-visible-in-window-p (point) window t))
-                  (occupied-pixels (cond ((nth 2 data) (nth 4 data))
-                                         (data (line-pixel-height))
-                                         (t (pdf-roll-display-page
-                                             (pdf-roll-page-at-current-pos) window)))))
-             (if (eq (point) (- (point-max) 3))
-                 (prog1 nil
-                   (setq n (min n (max 0 (- occupied-pixels (/ (window-text-height window t) 2)))))
-                   (message "End of buffer"))
-               (when (>= n occupied-pixels)
-                 (cl-decf n occupied-pixels))))
-      (forward-char 4))
-    (setf (pdf-view-current-page window) (pdf-roll-page-at-current-pos))
-    (pdf-roll-set-vscroll (+ (if (eq pos (point)) (window-vscroll window t) 0) n)
-                          window)))
+  (if (> 0 n)
+      (pdf-roll-scroll-backward (- n) window pixels)
+    (setq n (* n (if pixels 1 (frame-char-height))))
+    (let ((pos (goto-char (pdf-roll-window-start window))))
+      (while (let* ((data (pos-visible-in-window-p (point) window t))
+                    (occupied-pixels (cond ((nth 2 data) (nth 4 data))
+                                           (data (line-pixel-height))
+                                           (t (pdf-roll-display-page
+                                               (pdf-roll-page-at-current-pos) window)))))
+               (if (eq (point) (- (point-max) 3))
+                   (prog1 nil
+                     (setq n (min n (max 0 (- occupied-pixels (/ (window-text-height window t) 2)))))
+                     (message "End of buffer"))
+                 (when (>= n occupied-pixels)
+                   (cl-decf n occupied-pixels))))
+        (forward-char 4))
+      (setf (pdf-view-current-page window) (pdf-roll-page-at-current-pos))
+      (pdf-roll-set-vscroll (+ (if (eq pos (point)) (window-vscroll window t) 0) n)
+                            window))))
 
 (defun pdf-roll-scroll-backward (&optional n window pixels)
   "Scroll image N lines backwards in WINDOW.
@@ -351,32 +353,34 @@ scroll forward instead. With a prefix arg N is its numeric value.
 
 If PIXELS is non-nil N is number of pixels instead of lines."
   (interactive (list (prefix-numeric-value current-prefix-arg)))
-  (setq n (* (or n 1) (if pixels 1 (frame-char-height))))
+  (setq n (or n 1))
   (setq window (or window (selected-window)))
-  (when (> 0 n) (pdf-roll-scroll-backward (- n) window))
-  (goto-char (pdf-roll-window-start window))
-  ;; How much of the page at the top the window already shows past.  That is
-  ;; the vscroll; reading it back from `pos-visible-in-window-p' would measure
-  ;; it against `window-start', which is not updated yet (see
-  ;; `pdf-roll-window-start').
-  (let ((pixels-top (window-vscroll window t)))
-    (if (< n pixels-top)
-        (pdf-roll-set-vscroll (- (window-vscroll window t) n)
-                                window)
-      (cl-decf n pixels-top)
-      (while (and (if (bobp)
-                      (prog1 nil (message "Beginning of buffer."))
-                    t)
-                  (progn (forward-char -4)
-                         (pdf-roll-display-page
-                          (pdf-roll-page-at-current-pos) window)
-                         (cl-decf n (line-pixel-height)))
-                  (> n 0)))
-      ;; N is still positive when the loop stopped at the first page, which
-      ;; means the scroll asked for more pixels than the document has left.
-      ;; The top of page one is the limit.
-      (pdf-roll-set-vscroll (max 0 (- n)) window)))
-  (setf (pdf-view-current-page window) (pdf-roll-page-at-current-pos)))
+  (if (> 0 n)
+      (pdf-roll-scroll-forward (- n) window pixels)
+    (setq n (* n (if pixels 1 (frame-char-height))))
+    (goto-char (pdf-roll-window-start window))
+    ;; How much of the page at the top the window already shows past.  That is
+    ;; the vscroll; reading it back from `pos-visible-in-window-p' would measure
+    ;; it against `window-start', which is not updated yet (see
+    ;; `pdf-roll-window-start').
+    (let ((pixels-top (window-vscroll window t)))
+      (if (< n pixels-top)
+          (pdf-roll-set-vscroll (- (window-vscroll window t) n)
+                                  window)
+        (cl-decf n pixels-top)
+        (while (and (if (bobp)
+                        (prog1 nil (message "Beginning of buffer."))
+                      t)
+                    (progn (forward-char -4)
+                           (pdf-roll-display-page
+                            (pdf-roll-page-at-current-pos) window)
+                           (cl-decf n (line-pixel-height)))
+                    (> n 0)))
+        ;; N is still positive when the loop stopped at the first page, which
+        ;; means the scroll asked for more pixels than the document has left.
+        ;; The top of page one is the limit.
+        (pdf-roll-set-vscroll (max 0 (- n)) window)))
+    (setf (pdf-view-current-page window) (pdf-roll-page-at-current-pos))))
 
 (defun pdf-roll-scroll-screen-forward (&optional arg)
   "Scroll forward by (almost) ARG many full screens."
