@@ -103,10 +103,18 @@ If INHIBIT-SLICE-P is non-nil, disregard `pdf-view-current-slice'."
          (margin-overlay (pdf-roll--pos-overlay margin-pos window))
          (offset (when (> (window-width window t) (car size))
                    `(space :width (,(/ (- (window-width window t) (car size)) 2))))))
-    (overlay-put overlay 'display image)
-    (overlay-put overlay 'line-prefix offset)
-    (overlay-put margin-overlay 'display `(space :width (,(car size)) :height (,pdf-roll-vertical-margin)))
-    (overlay-put margin-overlay 'line-prefix offset)
+    ;; The overlays may be gone.  `revert-buffer' replaces the buffer text
+    ;; before `pdf-roll-initialize' is reached, and a page overlay has
+    ;; `evaporate' set, so the replacement collapses it -- postponing
+    ;; `pdf-roll-initialize' postpones the rebuild, not this.  The revert
+    ;; changed the buffer, so a redisplay follows that draws PAGE again; skip
+    ;; it here rather than write to an overlay that is no longer there.
+    (when overlay
+      (overlay-put overlay 'display image)
+      (overlay-put overlay 'line-prefix offset))
+    (when margin-overlay
+      (overlay-put margin-overlay 'display `(space :width (,(car size)) :height (,pdf-roll-vertical-margin)))
+      (overlay-put margin-overlay 'line-prefix offset))
     (cdr size)))
 
 (defun pdf-roll-display-page (page window &optional force)
@@ -116,8 +124,9 @@ With FORCE non-nil display fetch page again even if it is already displayed."
   ;; pass.  It is bound here too because `pdf-roll-scroll-forward' and
   ;; `pdf-roll-scroll-backward' render as they walk from page to page, and run
   ;; as commands rather than as part of redisplay.
-  (let ((pdf-roll--delay-revert t)
-        (display (overlay-get (pdf-roll-page-overlay page window) 'display)))
+  (let* ((pdf-roll--delay-revert t)
+         (overlay (pdf-roll-page-overlay page window))
+         (display (and overlay (overlay-get overlay 'display))))
     (if (or force (not display) (eq (car display) 'space))
         (pdf-roll-display-image (pdf-view-create-page page window) page window)
       (cdr (image-display-size display t)))))
@@ -245,8 +254,14 @@ It should be added to `pre-redisplay-functions' buffer locally."
           (image-mode-window-put 'displayed-pages new win)
           (set-window-point win (+ start
                                    (if (pos-visible-in-window-p (+ 2 start) win) 2 0))))
-        (setf (alist-get win pdf-roll--state)
-              `(,page ,height ,(window-pixel-width win) ,vscroll nil))
+        ;; Remember the state only if the pages were really drawn.  A revert
+        ;; that landed while `pdf-roll-display-pages' waited on the server
+        ;; took WIN's overlays away, and the state would then tell the
+        ;; redisplay that revert triggers that the pages are up to date,
+        ;; leaving the window on an empty buffer.
+        (when (pdf-roll-page-overlay 1 win)
+          (setf (alist-get win pdf-roll--state)
+                `(,page ,height ,(window-pixel-width win) ,vscroll nil)))
         (when page-changed (run-hooks 'pdf-view-after-change-page-hook))))))
 
 ;;; Page navigation commands
