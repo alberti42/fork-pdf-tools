@@ -61,21 +61,29 @@
                      mode-line-position :key 'car-safe)))))
 
 (defun pdf-misc-size-indication ()
-  "Return size indication string for the mode-line."
-  (let ((top (= (window-vscroll nil t) 0))
-        (bot (>= (+ (- (nth 3 (window-inside-pixel-edges))
-                       (nth 1 (window-inside-pixel-edges)))
-                    (window-vscroll nil t))
-                 (cdr (pdf-view-image-size t)))))
-    (cond
-     ((and top bot) " All")
-     (top " Top")
-     (bot " Bot")
-     (t (format
-         " %d%%%%"
-         (ceiling
-          (* 100 (/ (float (window-vscroll nil t))
-                    (cdr (pdf-view-image-size t))))))))))
+  "Return size indication string for the mode-line.
+Empty when the size of the page is not available."
+  ;; This runs from a mode-line construct, so it may not signal: redisplay
+  ;; reports the error and drops the rest of the line.  `pdf-view-image-size'
+  ;; has nothing to measure whenever the page carries no image -- before it
+  ;; has been rendered, and, with `pdf-view-roll-minor-mode', while the
+  ;; overlays a `revert-buffer' collapsed are being rebuilt.  In roll mode it
+  ;; reads the overlay holding the page, so it signals `(wrong-type-argument
+  ;; overlayp nil)' rather than returning nothing.
+  (let ((height (ignore-errors (cdr (pdf-view-image-size t))))
+        (vscroll (window-vscroll nil t)))
+    (if (not (and height (> height 0)))
+        ""
+      (let ((top (= vscroll 0))
+            (bot (>= (+ (- (nth 3 (window-inside-pixel-edges))
+                           (nth 1 (window-inside-pixel-edges)))
+                        vscroll)
+                     height)))
+        (cond
+         ((and top bot) " All")
+         (top " Top")
+         (bot " Bot")
+         (t (format " %d%%%%" (ceiling (* 100 (/ (float vscroll) height))))))))))
 
 (defvar pdf-misc-menu-bar-minor-mode-map (make-sparse-keymap)
   "The keymap used in `pdf-misc-menu-bar-minor-mode'.")
