@@ -45,6 +45,33 @@ jobs:
       - name: Compile epdfinfo server
         run: make autobuild
 
+      - name: Give cask an Emacs that still has the old time format
+        if: matrix.emacs-version == 'snapshot'
+        run: |
+          cat > "$HOME/cask-emacs" <<'WRAPPER'
+          #!/bin/sh
+          # cask.el computes the package timestamp with
+          #   (logior (lsh (car now) 16) (cadr now))
+          # which a recent `current-time' breaks: it returns (TICKS . HZ), so
+          # (cadr now) is (car 1000000000).  Binding `current-time-list' puts
+          # the list form back.
+          #
+          # cask runs `emacs -Q --script cask-cli.el'.  Emacs turns --script
+          # into -scriptload and moves it to the front, so an --eval added
+          # here would run after the script.  --batch -l keeps the order.
+          for a in "$@"; do
+            if [ "$a" = "--script" ]; then
+              set -- "$@" --batch --eval "(setq current-time-list t)" -l
+            else
+              set -- "$@" "$a"
+            fi
+            shift
+          done
+          exec emacs "$@"
+          WRAPPER
+          chmod +x "$HOME/cask-emacs"
+          echo "CASK_EMACS=$HOME/cask-emacs" >> "$GITHUB_ENV"
+
       - name: Install Elisp dependencies
         run: cask install
 
