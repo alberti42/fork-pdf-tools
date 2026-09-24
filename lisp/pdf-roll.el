@@ -162,8 +162,9 @@ Replaces the display property of the overlay holding a page with a space."
     ;; A page that is on the list but has no overlay is one the document no
     ;; longer has: PAGES comes from the `displayed-pages' of WINDOW, which
     ;; outlives the overlays `pdf-roll-initialize' recreates on a revert.
-    (when-let* ((overlay (pdf-roll-page-overlay page window)))
-      (overlay-put overlay 'display (get 'pdf-roll 'display)))))
+    (let ((overlay (pdf-roll-page-overlay page window)))
+      (when overlay
+        (overlay-put overlay 'display (get 'pdf-roll 'display))))))
 
 ;;; State Management
 (defun pdf-roll-new-window-function (&optional win)
