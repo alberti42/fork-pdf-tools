@@ -31,7 +31,7 @@
 (require 'dired)
 (require 'let-alist)
 
-(defvar pdf-history-inhibit-jump)
+(defvar pdf-history-browsing)
 (declare-function pdf-history-before-jump "pdf-history")
 (declare-function pdf-history-after-jump "pdf-history")
 
@@ -282,7 +282,7 @@ FIXME: EVENT not used at the moment."
              ;; With `next-error-follow-minor-mode' on, this runs on every
              ;; cursor movement in the occur buffer.  Read it here, while
              ;; that buffer is still current.
-             (pdf-history-inhibit-jump
+             (pdf-history-browsing
               (bound-and-true-p next-error-follow-minor-mode))
              window)
         (if no-select-window-p
