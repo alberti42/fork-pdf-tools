@@ -34,6 +34,7 @@
 ;; These functions are only used after a PdfView window was asserted,
 ;; which won't succeed, if pdf-view.el isn't loaded.
 (declare-function pdf-view-image-size "pdf-view")
+(declare-function pdf-view-displayed-image "pdf-view")
 (declare-function pdf-view-image-offset "pdf-view")
 (declare-function pdf-cache-pagesize "pdf-cache")
 (declare-function pdf-view-image-type "pdf-view")
@@ -1084,7 +1085,15 @@ Return the converted PNG image as a string.  See also
 `pdf-util-convert'."
 
   (pdf-util-assert-pdf-window)
-  (apply #'pdf-util-convert-image (pdf-view-current-image) specs))
+  (let ((image (pdf-view-displayed-image)))
+    ;; `pdf-view-current-image' stood here.  Only the non-roll branch of
+    ;; `pdf-view-display-image' writes that window property, so a page a
+    ;; window has only ever drawn through `pdf-roll-display-image' has
+    ;; none, and the nil reached `convert' as a file name.  Asking the
+    ;; window what it displays cannot go stale either.
+    (unless image
+      (error "This page has no image to convert"))
+    (apply #'pdf-util-convert-image image specs)))
 
 (defun pdf-util-convert--create-commands (spec)
   (let ((fg "red")
