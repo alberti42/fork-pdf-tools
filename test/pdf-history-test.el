@@ -111,4 +111,14 @@ PAGE and ORIGIN are places, so BODY can move the window along."
       (should (equal pdf-history-stack
                      '((4 (0.0 . 0.3)) (3 (0.0 . 0.5))))))))
 
+(ert-deftest pdf-history-jump-while-browsing ()
+  "A list buffer showing what the cursor is on records nothing."
+  (let ((page 3) (origin '(0.0 . 0.5)))
+    (pdf-history-test-with-stack page origin
+      (let ((pdf-history-inhibit-jump t))
+        (pdf-history-before-jump)
+        (setq page 4 origin '(0.0 . 0.1))
+        (pdf-history-after-jump))
+      (should (equal pdf-history-stack '((3 (0.0 . 0.5))))))))
+
 (provide 'pdf-history-test)

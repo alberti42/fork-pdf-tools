@@ -36,6 +36,16 @@
 (defvar-local pdf-history-index nil
   "The current index into the `pdf-history-stack'.")
 
+(defvar pdf-history-inhibit-jump nil
+  "Non-nil when a jump should leave the history alone.
+
+A list buffer that shows whatever the cursor is on moves the document as
+you look around: `pdf-outline-follow-mode', `pdf-annot-list-follow-minor-mode'
+and `next-error-follow-minor-mode' in an occur buffer all do.  That is
+browsing rather than going somewhere, as stepping through an isearch is,
+and `pdf-history-before-change-page-hook' declines to record for the same
+reason.")
+
 (defvar pdf-history--jump-page nil
   "The page a jump started on.
 Set by `pdf-history-before-jump' and read by `pdf-history-after-jump'.")
@@ -196,13 +206,15 @@ A command that follows a reference calls this and
 jump that stays on the page changes no page, so neither
 `pdf-view-before-change-page-hook' nor `pdf-view-after-change-page-hook'
 runs and the history would not hear about it."
-  (when pdf-history-minor-mode
+  (when (and pdf-history-minor-mode
+             (not pdf-history-inhibit-jump))
     (setq pdf-history--jump-page (pdf-view-current-page))
     (pdf-history-record-origin)))
 
 (defun pdf-history-after-jump ()
   "Record where a jump arrived.  See `pdf-history-before-jump'."
-  (when pdf-history-minor-mode
+  (when (and pdf-history-minor-mode
+             (not pdf-history-inhibit-jump))
     (let ((origin (pdf-history-current-origin)))
       (if (eq (pdf-view-current-page) pdf-history--jump-page)
           ;; Nothing was pushed, because the page did not change.  The

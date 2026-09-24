@@ -34,12 +34,7 @@
 (require 'cl-lib)
 (require 'seq)
 
-(defvar pdf-annot--following nil
-  "Non-nil while the annotation list is following the cursor.
-`pdf-annot-show-annotation' then leaves the history alone: moving through
-the list looks at annotations rather than going to one, as stepping through
-an isearch does.  `pdf-history-before-change-page-hook' declines to record
-for the same reason.")
+(defvar pdf-history-inhibit-jump)
 
 (declare-function pdf-history-before-jump "pdf-history")
 (declare-function pdf-history-after-jump "pdf-history")
@@ -1011,8 +1006,7 @@ other annotations."
     (pdf-util-assert-pdf-window)
     (let ((page (pdf-annot-get a 'page))
           (size (pdf-view-image-size))
-          (record (and (not pdf-annot--following)
-                       (bound-and-true-p pdf-history-minor-mode))))
+          (record (bound-and-true-p pdf-history-minor-mode)))
       (when record (pdf-history-before-jump))
       (unless (= page (pdf-view-current-page))
         (pdf-view-goto-page page))
@@ -1953,7 +1947,9 @@ have the PDF buffer automatically move along with us."
                         (display-buffer
                          buffer
                          '(nil (inhibit-same-window . t))))
-                  (let ((pdf-annot--following t))
+                  ;; The list is showing what the cursor is on, which is
+                  ;; not a place the reader asked to go to.
+                  (let ((pdf-history-inhibit-jump t))
                     (pdf-annot-show-annotation a t)))))
             pdf-annot-list-document-buffer
             (pdf-annot-getannot id pdf-annot-list-document-buffer)))))
