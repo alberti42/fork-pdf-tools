@@ -106,7 +106,6 @@ jobs:
             mingw-w64-x86_64-imagemagick
             mingw-w64-x86_64-zlib
             mingw-w64-x86_64-openssl
-            mingw-w64-x86_64-emacs
 
       - name: Install Cask
         run: git clone https://github.com/cask/cask ~/.cask
