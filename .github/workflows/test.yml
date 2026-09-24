@@ -9,9 +9,6 @@ on:
 jobs:
   test-ubuntu:
     runs-on: ubuntu-latest
-    # Cask cannot build the package tar on the Emacs snapshot, see the commit
-    # that added this line.  The other versions still have to pass.
-    continue-on-error: ${{ matrix.emacs-version == 'snapshot' }}
     strategy:
       fail-fast: false
       matrix:
