@@ -4,10 +4,23 @@
 #+Maintainer: Vedang Manerikar
 #+Maintainer_Email: vedang.manerikar@gmail.com
 
-[[https://github.com/vedang/pdf-tools/actions/workflows/test.yml][https://github.com/vedang/pdf-tools/actions/workflows/test.yml/badge.svg]]
-[[https://elpa.nongnu.org/nongnu/pdf-tools.html][http://elpa.nongnu.org/nongnu/pdf-tools.svg]]
-[[https://stable.melpa.org/#/pdf-tools][http://stable.melpa.org/packages/pdf-tools-badge.svg]]
-[[https://melpa.org/#/pdf-tools][http://melpa.org/packages/pdf-tools-badge.svg]]
+This is the =merged= branch of a fork of [[https://github.com/vedang/pdf-tools][pdf-tools]], not the project itself.
+It is upstream =master= with the fixes from the pull requests open there
+applied on top: [[https://github.com/vedang/pdf-tools/pull/357][#357]], [[https://github.com/vedang/pdf-tools/pull/361][#361]], [[https://github.com/vedang/pdf-tools/pull/362][#362]], [[https://github.com/vedang/pdf-tools/pull/364][#364]], [[https://github.com/vedang/pdf-tools/pull/365][#365]], [[https://github.com/vedang/pdf-tools/pull/366][#366]], [[https://github.com/vedang/pdf-tools/pull/367][#367]], [[https://github.com/vedang/pdf-tools/pull/370][#370]] and [[https://github.com/vedang/pdf-tools/pull/371][#371]].
+Everything else below is the upstream README.
+
+[[https://github.com/alberti42/fork-pdf-tools/actions/workflows/test.yml][https://github.com/alberti42/fork-pdf-tools/actions/workflows/test.yml/badge.svg?branch=merged]]
+
+#+begin_src emacs-lisp
+(use-package pdf-tools
+  :straight '(pdf-tools :type git :host github
+                        :repo "alberti42/fork-pdf-tools" :branch "merged"
+                        :files (:defaults "README" ("build" "Makefile") ("build" "server"))))
+#+end_src
+
+Please report bugs to [[https://github.com/vedang/pdf-tools/issues][the project]] rather than here, so that everyone sees
+them and the fix can go to the same place. [[https://github.com/vedang/pdf-tools/issues/372][Issue 372]] says what this branch is
+for and how to ask for a pull request to be added to it.
 
 The ~pdf-tools~ Wiki is maintained at https://pdftools.wiki. Head to the site if you find it easier to navigate a website for reading a manual. All the topics on the site are listed at https://pdftools.wiki/impulse.
 
