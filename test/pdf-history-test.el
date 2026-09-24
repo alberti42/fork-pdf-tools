@@ -111,14 +111,50 @@ PAGE and ORIGIN are places, so BODY can move the window along."
       (should (equal pdf-history-stack
                      '((4 (0.0 . 0.3)) (3 (0.0 . 0.5))))))))
 
-(ert-deftest pdf-history-jump-while-browsing ()
-  "A list buffer showing what the cursor is on records nothing."
+(ert-deftest pdf-history-browsing-keeps-one-item ()
+  "Browsing leaves one item for where it landed, above where you were."
   (let ((page 3) (origin '(0.0 . 0.5)))
     (pdf-history-test-with-stack page origin
-      (let ((pdf-history-inhibit-jump t))
+      (let ((pdf-history-browsing t))
         (pdf-history-before-jump)
-        (setq page 4 origin '(0.0 . 0.1))
+        (setq page 5 origin '(0.0 . 0.1))
+        (pdf-history-after-jump)
+        (should (equal pdf-history-stack
+                       '((5 (0.0 . 0.1) t) (3 (0.0 . 0.5)))))
+        ;; The next line the cursor passes replaces it.
+        (pdf-history-before-jump)
+        (setq page 9 origin '(0.0 . 0.2))
+        (pdf-history-after-jump)
+        (should (equal pdf-history-stack
+                       '((9 (0.0 . 0.2) t) (3 (0.0 . 0.5)))))))))
+
+(ert-deftest pdf-history-reading-on-keeps-the-item ()
+  "Reading on from where browsing left you makes that item a real one."
+  (let ((page 3) (origin '(0.0 . 0.5)))
+    (pdf-history-test-with-stack page origin
+      (let ((pdf-history-browsing t))
+        (pdf-history-before-jump)
+        (setq page 5 origin '(0.0 . 0.1))
         (pdf-history-after-jump))
+      (setq origin '(0.0 . 0.7))
+      (pdf-history-record-origin)
+      (should (equal pdf-history-stack
+                     '((5 (0.0 . 0.7)) (3 (0.0 . 0.5)))))
+      ;; So the next thing followed is stacked rather than swapped in.
+      (let ((pdf-history-browsing t))
+        (pdf-history-before-jump)
+        (setq page 9 origin '(0.0 . 0.2))
+        (pdf-history-after-jump))
+      (should (equal pdf-history-stack
+                     '((9 (0.0 . 0.2) t) (5 (0.0 . 0.7)) (3 (0.0 . 0.5))))))))
+
+(ert-deftest pdf-history-browsing-does-not-push-on-a-page-change ()
+  "The page hook stays out of the way while browsing."
+  (let ((page 3) (origin '(0.0 . 0.5)))
+    (pdf-history-test-with-stack page origin
+      (setq page 4)
+      (let ((pdf-history-browsing t))
+        (pdf-history-before-change-page-hook))
       (should (equal pdf-history-stack '((3 (0.0 . 0.5))))))))
 
 (provide 'pdf-history-test)

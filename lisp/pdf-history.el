@@ -36,15 +36,15 @@
 (defvar-local pdf-history-index nil
   "The current index into the `pdf-history-stack'.")
 
-(defvar pdf-history-inhibit-jump nil
-  "Non-nil when a jump should leave the history alone.
+(defvar pdf-history-browsing nil
+  "Non-nil while a list buffer is showing whatever the cursor is on.
 
-A list buffer that shows whatever the cursor is on moves the document as
-you look around: `pdf-outline-follow-mode', `pdf-annot-list-follow-minor-mode'
-and `next-error-follow-minor-mode' in an occur buffer all do.  That is
-browsing rather than going somewhere, as stepping through an isearch is,
-and `pdf-history-before-change-page-hook' declines to record for the same
-reason.")
+`pdf-outline-follow-mode', `pdf-annot-list-follow-minor-mode' and
+`next-error-follow-minor-mode' in an occur buffer all move the document as
+you look around.  The history then keeps one provisional item, for wherever
+browsing has currently landed, and replaces it on the next move instead of
+stacking one item per line the cursor passes.  The position you were
+reading stays underneath it, so `pdf-history-backward' goes back there.")
 
 (defvar pdf-history--jump-page nil
   "The page a jump started on.
@@ -92,6 +92,7 @@ may be navigated with the following keys.
 (defun pdf-history-before-change-page-hook ()
   "Push a history item, before leaving this page."
   (when (and pdf-history-minor-mode
+             (not pdf-history-browsing)
              (not (bound-and-true-p pdf-isearch-active-mode))
              (pdf-view-current-page))
     (pdf-history-push)))
@@ -120,6 +121,14 @@ the place it came from and the place it went to are both on that page."
   (let ((item (pdf-history-create-item)))
     (when (car item)
       (pdf-history--push-item item))))
+
+(defun pdf-history--provisional-p ()
+  "Return non-nil if the item the index names was left there by browsing."
+  (nth 2 (nth pdf-history-index pdf-history-stack)))
+
+(defun pdf-history--replace-item (item)
+  "Put ITEM where the index points, in place of what is there."
+  (setf (nth pdf-history-index pdf-history-stack) item))
 
 (defun pdf-history--push-item (item)
   "Put ITEM on the stack, dropping whatever was ahead of the index."
@@ -196,7 +205,11 @@ scrolling within a page runs neither hook."
           (origin (pdf-history-current-origin)))
       ;; Keep the position the item has if there is nothing to measure.
       (when (and origin (eq (car item) (pdf-view-current-page)))
-        (setf (nth 1 item) origin)))))
+        (setf (nth 1 item) origin)
+        ;; Reading on from where browsing left you makes it a real
+        ;; position, which the next thing you follow must not replace.
+        (when (cddr item)
+          (setcdr (cdr item) nil))))))
 
 (defun pdf-history-before-jump ()
   "Note where the window is, before a command jumps it somewhere else.
@@ -206,29 +219,37 @@ A command that follows a reference calls this and
 jump that stays on the page changes no page, so neither
 `pdf-view-before-change-page-hook' nor `pdf-view-after-change-page-hook'
 runs and the history would not hear about it."
-  (when (and pdf-history-minor-mode
-             (not pdf-history-inhibit-jump))
+  (when pdf-history-minor-mode
     (setq pdf-history--jump-page (pdf-view-current-page))
-    (pdf-history-record-origin)))
+    ;; While browsing, the item on top is only where browsing last landed
+    ;; and the next move replaces it, so it has no position worth keeping.
+    (unless (and pdf-history-browsing (pdf-history--provisional-p))
+      (pdf-history-record-origin))))
 
 (defun pdf-history-after-jump ()
   "Record where a jump arrived.  See `pdf-history-before-jump'."
-  (when (and pdf-history-minor-mode
-             (not pdf-history-inhibit-jump))
+  (when pdf-history-minor-mode
     (let ((origin (pdf-history-current-origin)))
-      (if (eq (pdf-view-current-page) pdf-history--jump-page)
+      (cond
+       (pdf-history-browsing
+        ;; One item for where browsing has landed, replaced as it moves on.
+        (let ((item (list (pdf-view-current-page) origin t)))
+          (if (pdf-history--provisional-p)
+              (pdf-history--replace-item item)
+            (pdf-history--push-item item))))
+       ((eq (pdf-view-current-page) pdf-history--jump-page)
           ;; Nothing was pushed, because the page did not change.  The
           ;; position the jump reached needs an item of its own, or there is
           ;; nothing to come back from.  A jump that landed where the window
           ;; already was needs none.
-          (unless (equal origin
-                         (nth 1 (nth pdf-history-index pdf-history-stack)))
-            (pdf-history-push-position))
-        ;; `pdf-history-push' ran from `pdf-view-after-change-page-hook',
-        ;; while `pdf-view-goto-page' had just set the vscroll to 0 and
-        ;; before the jump scrolled to its target.  Give the item the
-        ;; position the window actually reached.
-        (pdf-history-record-origin)))
+        (unless (equal origin
+                       (nth 1 (nth pdf-history-index pdf-history-stack)))
+          (pdf-history-push-position)))
+       ;; `pdf-history-push' ran from `pdf-view-after-change-page-hook',
+       ;; while `pdf-view-goto-page' had just set the vscroll to 0 and
+       ;; before the jump scrolled to its target.  Give the item the
+       ;; position the window actually reached.
+       (t (pdf-history-record-origin))))
     (setq pdf-history--jump-page nil)))
 
 (defun pdf-history-beginning-of-history-p ()

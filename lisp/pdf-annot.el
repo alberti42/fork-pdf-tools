@@ -34,7 +34,7 @@
 (require 'cl-lib)
 (require 'seq)
 
-(defvar pdf-history-inhibit-jump)
+(defvar pdf-history-browsing)
 
 (declare-function pdf-history-before-jump "pdf-history")
 (declare-function pdf-history-after-jump "pdf-history")
@@ -1949,7 +1949,7 @@ have the PDF buffer automatically move along with us."
                          '(nil (inhibit-same-window . t))))
                   ;; The list is showing what the cursor is on, which is
                   ;; not a place the reader asked to go to.
-                  (let ((pdf-history-inhibit-jump t))
+                  (let ((pdf-history-browsing t))
                     (pdf-annot-show-annotation a t)))))
             pdf-annot-list-document-buffer
             (pdf-annot-getannot id pdf-annot-list-document-buffer)))))
