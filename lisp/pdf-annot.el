@@ -34,6 +34,14 @@
 (require 'cl-lib)
 (require 'seq)
 
+(defvar pdf-annot--following nil
+  "Non-nil while the annotation list is following the cursor.
+`pdf-annot-show-annotation' then leaves the history alone: moving through
+the list looks at annotations rather than going to one.")
+
+(declare-function pdf-history-before-jump "pdf-history")
+(declare-function pdf-history-after-jump "pdf-history")
+
 
 ;; * ================================================================== *
 ;; * Customizations
@@ -1000,7 +1008,10 @@ other annotations."
     (when window (select-window window 'norecord))
     (pdf-util-assert-pdf-window)
     (let ((page (pdf-annot-get a 'page))
-          (size (pdf-view-image-size)))
+          (size (pdf-view-image-size))
+          (record (and (not pdf-annot--following)
+                       (bound-and-true-p pdf-history-minor-mode))))
+      (when record (pdf-history-before-jump))
       (unless (= page (pdf-view-current-page))
         (pdf-view-goto-page page))
       (let ((edges (pdf-annot-get-display-edges a)))
@@ -1015,7 +1026,8 @@ other annotations."
              :width (car size))
            (when pdf-view-roll-minor-mode page)))
         (pdf-util-scroll-to-edges
-         (pdf-util-scale-relative-to-pixel (car edges)))))))
+         (pdf-util-scale-relative-to-pixel (car edges))))
+      (when record (pdf-history-after-jump)))))
 
 (defun pdf-annot-read-annotation (&optional prompt)
   "Let the user choose a annotation a mouse click using PROMPT."
@@ -1939,7 +1951,8 @@ have the PDF buffer automatically move along with us."
                         (display-buffer
                          buffer
                          '(nil (inhibit-same-window . t))))
-                  (pdf-annot-show-annotation a t))))
+                  (let ((pdf-annot--following t))
+                    (pdf-annot-show-annotation a t)))))
             pdf-annot-list-document-buffer
             (pdf-annot-getannot id pdf-annot-list-document-buffer)))))
 
