@@ -31,6 +31,7 @@
 (require 'dired)
 (require 'let-alist)
 
+(defvar pdf-history-inhibit-jump)
 (declare-function pdf-history-before-jump "pdf-history")
 (declare-function pdf-history-after-jump "pdf-history")
 
@@ -278,19 +279,18 @@ FIXME: EVENT not used at the moment."
                          doc
                        (or (find-buffer-visiting doc)
                            (find-file-noselect doc))))
-             ;; With `next-error-follow-minor-mode' this runs on every
-             ;; cursor movement in the occur buffer, which is browsing the
-             ;; matches rather than going to one, as stepping through an
-             ;; isearch is: `pdf-history-before-change-page-hook' declines
-             ;; to record for the same reason.  Leave the history alone.
-             (record (not (bound-and-true-p next-error-follow-minor-mode)))
+             ;; With `next-error-follow-minor-mode' on, this runs on every
+             ;; cursor movement in the occur buffer.  Read it here, while
+             ;; that buffer is still current.
+             (pdf-history-inhibit-jump
+              (bound-and-true-p next-error-follow-minor-mode))
              window)
         (if no-select-window-p
             (setq window (display-buffer buffer))
           (pop-to-buffer buffer)
           (setq window (selected-window)))
         (with-selected-window window
-          (when (and record (bound-and-true-p pdf-history-minor-mode))
+          (when (bound-and-true-p pdf-history-minor-mode)
             (pdf-history-before-jump))
           (when page
             (pdf-view-goto-page page))
@@ -301,7 +301,7 @@ FIXME: EVENT not used at the moment."
                   (pdf-isearch-batch-mode t))
               (pdf-isearch-hl-matches pixel-match nil t)
               (pdf-isearch-focus-match-batch pixel-match)))
-          (when (and record (bound-and-true-p pdf-history-minor-mode))
+          (when (bound-and-true-p pdf-history-minor-mode)
             (pdf-history-after-jump)))))))
 
 (defun pdf-occur-view-occurrence (&optional _event)
