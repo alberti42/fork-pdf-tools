@@ -29,6 +29,8 @@
 (require 'let-alist)
 (require 'org)
 
+(declare-function pdf-view-displayed-image "pdf-view")
+
 
 
 (declare-function pdf-roll-page-overlay "pdf-roll")
@@ -243,9 +245,7 @@ See `pdf-links-action-perform' for the interface."
       (unwind-protect
           (progn
             (dolist (page pages)
-              (let* ((image (or (overlay-get (pdf-roll-page-overlay page win) 'display)
-                                (pdf-view-current-image)))
-                     (image (or (assoc 'image image) image))
+              (let* ((image (pdf-view-displayed-image win page))
                      (height (cdr (image-size image t)))
                      (orig-image (create-image (plist-get (cdr image) :data)
                                                (pdf-view-image-type) t)))

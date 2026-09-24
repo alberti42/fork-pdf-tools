@@ -1147,13 +1147,16 @@ See also `pdf-view-use-imagemagick'."
       :map hotspots
       :pointer 'arrow)))
 
-(defun pdf-view-image-size (&optional displayed-p window page)
-  "Return the size in pixel of the current image in WINDOW.
+(defun pdf-view-displayed-image (&optional window page)
+  "Return the image WINDOW displays for PAGE.
 
-If DISPLAYED-P is non-nil, return the size of the displayed
-image.  These values may be different, if slicing is used.
+WINDOW defaults to the selected one and PAGE to the page it is showing.
+With `pdf-view-roll-minor-mode' the image is on the overlay holding the
+page, and the page is drawn first if WINDOW has not drawn it yet;
+otherwise it is the display property of the buffer.
 
-If PAGE is non-nil return its size instead of current page."
+A display property may name more than the image, so what is returned is
+the image itself, ready for `create-image' or `pdf-util-convert-image'."
   (let ((display-prop (if pdf-view-roll-minor-mode
                           (progn (setq window (if (windowp window) window (selected-window)))
                                  (setq page (or page (pdf-view-current-page window)))
@@ -1161,6 +1164,18 @@ If PAGE is non-nil return its size instead of current page."
                                    (pdf-view-display-page page window))
                                  (overlay-get (pdf-roll-page-overlay page window) 'display))
                         (image-get-display-property))))
+    (or (and (consp display-prop)
+             (assoc 'image display-prop))
+        display-prop)))
+
+(defun pdf-view-image-size (&optional displayed-p window page)
+  "Return the size in pixel of the current image in WINDOW.
+
+If DISPLAYED-P is non-nil, return the size of the displayed
+image.  These values may be different, if slicing is used.
+
+If PAGE is non-nil return its size instead of current page."
+  (let ((display-prop (pdf-view-displayed-image window page)))
     (if displayed-p
         (image-display-size display-prop t)
       (image-size display-prop t))))
