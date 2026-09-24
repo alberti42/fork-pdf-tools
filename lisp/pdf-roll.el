@@ -217,9 +217,10 @@ overlays."
         (set-buffer-modified-p nil))
     (unless (pdf-roll-page-overlay 1 win)
       (dotimes (i (/ (point-max) 2))
-        (when-let* ((prototype (cl-find-if #'pdf-roll--own-overlay-p
-                                           (overlays-at (1+ (* 2 i))))))
-          (overlay-put (copy-overlay prototype) 'window win)))
+        (let ((prototype (cl-find-if #'pdf-roll--own-overlay-p
+                                     (overlays-at (1+ (* 2 i))))))
+          (when prototype
+            (overlay-put (copy-overlay prototype) 'window win))))
       (dolist (win-st pdf-roll--state)
         (when-let ((win-old (car-safe win-st))
                    ((not (window-live-p win-old))))
