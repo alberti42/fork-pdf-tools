@@ -279,8 +279,10 @@ FIXME: EVENT not used at the moment."
                        (or (find-buffer-visiting doc)
                            (find-file-noselect doc))))
              ;; With `next-error-follow-minor-mode' this runs on every
-             ;; cursor movement in the occur buffer, which is browsing
-             ;; rather than going somewhere: leave the history alone.
+             ;; cursor movement in the occur buffer, which is browsing the
+             ;; matches rather than going to one, as stepping through an
+             ;; isearch is: `pdf-history-before-change-page-hook' declines
+             ;; to record for the same reason.  Leave the history alone.
              (record (not (bound-and-true-p next-error-follow-minor-mode)))
              window)
         (if no-select-window-p

@@ -37,7 +37,9 @@
 (defvar pdf-annot--following nil
   "Non-nil while the annotation list is following the cursor.
 `pdf-annot-show-annotation' then leaves the history alone: moving through
-the list looks at annotations rather than going to one.")
+the list looks at annotations rather than going to one, as stepping through
+an isearch does.  `pdf-history-before-change-page-hook' declines to record
+for the same reason.")
 
 (declare-function pdf-history-before-jump "pdf-history")
 (declare-function pdf-history-after-jump "pdf-history")
