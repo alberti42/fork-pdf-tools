@@ -68,4 +68,15 @@ PAGE and ORIGIN are places, so BODY can move the window along."
       (should (equal (nth pdf-history-index pdf-history-stack)
                      '(3 (0.0 . 0.25)))))))
 
+(ert-deftest pdf-history-push-needs-a-page ()
+  "A buffer whose window has no page yet puts nothing on the stack."
+  (pdf-history-test-with-stack nil '(0.0 . 0.0)
+    (should (null pdf-history-stack))))
+
+(ert-deftest pdf-history-backward-on-an-empty-stack ()
+  "Going back with nothing on the stack says so."
+  (pdf-history-test-with-stack nil '(0.0 . 0.0)
+    (should (equal (should-error (pdf-history-backward 1))
+                   '(error "The history is empty")))))
+
 (provide 'pdf-history-test)

@@ -86,12 +86,15 @@ may be navigated with the following keys.
   "Push the current page on the stack.
 
 This function does nothing, if current stack item already
-represents the current page."
+represents the current page, or if there is no current page yet.
+`pdf-history-minor-mode' calls `pdf-history-clear' before the
+window it is turned on in has been given one."
   (interactive)
   (let ((item (pdf-history-create-item)))
-    (unless (and pdf-history-stack
-                 (eq (car (nth pdf-history-index pdf-history-stack))
-                     (car item)))
+    (unless (or (null (car item))
+                (and pdf-history-stack
+                     (eq (car (nth pdf-history-index pdf-history-stack))
+                         (car item))))
       (setq pdf-history-stack
             (last pdf-history-stack
                   (- (length pdf-history-stack)
