@@ -79,4 +79,36 @@ PAGE and ORIGIN are places, so BODY can move the window along."
     (should (equal (should-error (pdf-history-backward 1))
                    '(error "The history is empty")))))
 
+(ert-deftest pdf-history-jump-within-a-page ()
+  "A jump that stays on the page records where it came from and where it went."
+  (let ((page 3) (origin '(0.0 . 0.5)))
+    (pdf-history-test-with-stack page origin
+      (pdf-history-before-jump)
+      (setq origin '(0.0 . 0.1))
+      (pdf-history-after-jump)
+      (should (equal pdf-history-stack
+                     '((3 (0.0 . 0.1)) (3 (0.0 . 0.5))))))))
+
+(ert-deftest pdf-history-jump-that-does-not-move ()
+  "A jump that lands where the window already was adds nothing."
+  (let ((page 3) (origin '(0.0 . 0.5)))
+    (pdf-history-test-with-stack page origin
+      (pdf-history-before-jump)
+      (pdf-history-after-jump)
+      (should (equal pdf-history-stack '((3 (0.0 . 0.5))))))))
+
+(ert-deftest pdf-history-jump-to-another-page ()
+  "A jump to another page gives its item the position the jump reached."
+  (let ((page 3) (origin '(0.0 . 0.5)))
+    (pdf-history-test-with-stack page origin
+      (pdf-history-before-jump)
+      ;; What `pdf-view-goto-page' does: change the page and push, with the
+      ;; vscroll back at 0, before the jump scrolls to its target.
+      (setq page 4 origin '(0.0 . 0.0))
+      (pdf-history-push)
+      (setq origin '(0.0 . 0.3))
+      (pdf-history-after-jump)
+      (should (equal pdf-history-stack
+                     '((4 (0.0 . 0.3)) (3 (0.0 . 0.5))))))))
+
 (provide 'pdf-history-test)
