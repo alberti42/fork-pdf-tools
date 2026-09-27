@@ -152,3 +152,48 @@ that copy has to be given the saved document too."
         (set-buffer-modified-p t)
         (save-buffer)
         (should (= (+ 2 before) (pdf-view-test-annotation-count (buffer-file-name))))))))
+
+(ert-deftest pdf-view-save-a-pdf-inside-a-tar ()
+  "Saving a PDF that lives in a tar puts it back into the archive."
+  (skip-unless (executable-find "tar"))
+  (let* ((dir (make-temp-file "pdf-view-test-" t))
+         (tarfile (expand-file-name "archive.tar" dir))
+         (out (expand-file-name "out" dir))
+         tarbuf member)
+    (unwind-protect
+        (progn
+          (copy-file (expand-file-name "test.pdf") (expand-file-name "doc.pdf" dir) t)
+          (let ((default-directory dir))
+            (unless (eq 0 (call-process "tar" nil nil nil "cf" tarfile "doc.pdf"))
+              (error "Could not write %s" tarfile)))
+          ;; `tar-extract' runs `normal-mode' and then turns on
+          ;; `tar-subfile-mode'; setting the major mode afterwards would
+          ;; undo that, so let the mode be chosen the usual way.
+          (add-to-list 'auto-mode-alist '("\\.[pP][dD][fF]\\'" . pdf-view-mode))
+          (setq tarbuf (find-file-noselect tarfile))
+          (with-current-buffer tarbuf
+            (goto-char (point-min))
+            (should (re-search-forward "doc\\.pdf" nil t))
+            (beginning-of-line)
+            (tar-extract)
+            (setq member (current-buffer)))
+          (with-current-buffer member
+            (should (derived-mode-p 'pdf-view-mode))
+            (should (bound-and-true-p tar-subfile-mode))
+            (let ((before (length (pdf-info-getannots))))
+              (pdf-info-addannot 1 '(0.1 0.1 0.5 0.15) 'highlight)
+              (set-buffer-modified-p t)
+              (save-buffer)
+              (with-current-buffer tarbuf (save-buffer))
+              (make-directory out t)
+              (unless (eq 0 (call-process "tar" nil nil nil "xf" tarfile "-C" out))
+                (error "Could not read %s back" tarfile))
+              (should (= (1+ before)
+                         (length (pdf-info-getannots
+                                  nil (expand-file-name "doc.pdf" out))))))))
+      (dolist (b (list member tarbuf))
+        (when (buffer-live-p b)
+          (with-current-buffer b
+            (set-buffer-modified-p nil)
+            (let (kill-buffer-hook) (kill-buffer)))))
+      (when (file-directory-p dir) (delete-directory dir t)))))

@@ -570,20 +570,53 @@ operating on a local copy of a remote file."
       (buffer-file-name)
       (buffer-file-name (buffer-base-buffer))))
 
+(defun pdf-view--archive-member-p ()
+  "Return non-nil if this buffer is a member of an archive.
+
+`tar-mode\' and `arc-mode\' write such a buffer back into the archive
+themselves, from `write-contents-functions\', and read the document out of
+the buffer to do it."
+  (or (bound-and-true-p tar-subfile-mode)
+      (bound-and-true-p archive-subfile-mode)))
+
 (defun pdf-view--write-contents-function ()
-  "Function for `write-contents-functions' to save the buffer."
+  "Function for `write-contents-functions' to save the buffer.
+
+Returns non-nil when it has written the document itself, and nil when it
+has put the document in the buffer for Emacs to write."
   (when (pdf-util-pdf-buffer-p)
-    (let ((tempfile (pdf-info-save pdf-view--server-file-name))
-          (inhibit-read-only t))
+    (let* ((tempfile (pdf-info-save pdf-view--server-file-name))
+           (inhibit-read-only t)
+           (target (buffer-file-name))
+           (written nil))
       (unwind-protect
           (progn
-            ;; Order matters here: We need to first read the new
-            ;; content (tempfile) into the buffer, and then close the PDF.
-            ;; Since while closing the file (and freeing its resources
-            ;; in the process), it may be immediately reopened due to
-            ;; redisplay happening inside the pdf-info-close function
-            ;; (while waiting for a response from the process.).
-            (insert-file-contents tempfile nil nil nil t)
+            (if (or (null target)
+                    (pdf-view--archive-member-p))
+                ;; Emacs writes the buffer: when there is no file yet it
+                ;; asks for a name, and the mode above an archive member
+                ;; puts the buffer back into the archive.  Either way the
+                ;; document has to be in the buffer.
+                ;;
+                ;; Order matters here: We need to first read the new
+                ;; content (tempfile) into the buffer, and then close the PDF.
+                ;; Since while closing the file (and freeing its resources
+                ;; in the process), it may be immediately reopened due to
+                ;; redisplay happening inside the pdf-info-close function
+                ;; (while waiting for a response from the process.).
+                (insert-file-contents tempfile nil nil nil t)
+              ;; Otherwise write it here.  `write-region\' goes through
+              ;; `file-name-handler-alist\', so jka-compr compresses and epa
+              ;; encrypts exactly as they would for the buffer, and the
+              ;; buffer is left alone -- which matters under
+              ;; `pdf-view-roll-minor-mode\', whose page overlays carry
+              ;; `evaporate\' and go with the text they hang on.
+              (with-temp-buffer
+                (set-buffer-multibyte nil)
+                (insert-file-contents-literally tempfile)
+                (let ((coding-system-for-write 'binary))
+                  (write-region nil nil target nil 'no-message)))
+              (setq written t))
             ;; The server does not read the file for a document Emacs had to
             ;; hand it a copy of -- one that is compressed, encrypted or
             ;; inside an archive.  Without this the copy keeps the document
@@ -592,10 +625,13 @@ operating on a local copy of a remote file."
             ;; file.
             (when pdf-view--buffer-file-name
               (copy-file tempfile pdf-view--buffer-file-name t))
-            (pdf-info-close pdf-view--server-file-name))
+            (pdf-info-close pdf-view--server-file-name)
+            (when written
+              (set-buffer-modified-p nil)
+              (clear-visited-file-modtime)))
         (when (file-exists-p tempfile)
-          (delete-file tempfile)))))
-  nil)
+          (delete-file tempfile)))
+      written)))
 
 (defun pdf-view--after-revert ()
   "Reload the local copy in case of a remote file, and close the document."
