@@ -65,3 +65,90 @@
           (should (numberp (pdf-info-number-of-pages temp)))))
     (when (file-exists-p temp)
       (delete-file temp))))
+
+;;; Saving a document the server cannot open by itself
+
+(defmacro pdf-view-test-with-compressed-pdf (var &rest body)
+  "Gzip test.pdf, open it, bind VAR to the buffer and run BODY."
+  (declare (indent 1) (debug t))
+  `(let* ((plain (make-temp-file "pdf-view-test-" nil ".pdf"))
+          (gz (concat plain ".gz")))
+     (unwind-protect
+         (progn
+           (copy-file (expand-file-name "test.pdf") plain t)
+           (unless (eq 0 (call-process "gzip" nil nil nil "-f" plain))
+             (error "Could not gzip %s" plain))
+           (let ((,var (find-file-noselect gz)))
+             (with-current-buffer ,var
+               (unless (derived-mode-p 'pdf-view-mode) (pdf-view-mode)))
+             (unwind-protect (progn ,@body)
+               (when (buffer-live-p ,var)
+                 (with-current-buffer ,var
+                   (set-buffer-modified-p nil)
+                   (let (kill-buffer-hook) (kill-buffer)))))))
+       (dolist (f (list plain gz))
+         (when (file-exists-p f) (delete-file f))))))
+
+(defun pdf-view-test-file-magic (file)
+  "Return the first two bytes of FILE as a string."
+  (with-temp-buffer
+    (set-buffer-multibyte nil)
+    (insert-file-contents-literally file nil 0 2)
+    (buffer-string)))
+
+(defun pdf-view-test-annotation-count (gz)
+  "Return how many annotations the gzipped document GZ has."
+  (let ((copy (make-temp-file "pdf-view-test-" nil ".pdf")))
+    (unwind-protect
+        (progn
+          (with-temp-file copy
+            (set-buffer-multibyte nil)
+            (unless (eq 0 (call-process "gzip" nil t nil "-dc" gz))
+              (error "Could not decompress %s" gz)))
+          (prog1 (length (pdf-info-getannots nil copy))
+            (pdf-info-close copy)))
+      (when (file-exists-p copy) (delete-file copy)))))
+
+(ert-deftest pdf-view-save-keeps-a-pdf-compressed ()
+  "Saving a .pdf.gz leaves a gzip file, not a plain PDF."
+  (skip-unless (executable-find "gzip"))
+  (pdf-view-test-with-compressed-pdf buffer
+    (with-current-buffer buffer
+      (pdf-info-addannot 1 '(0.1 0.1 0.5 0.15) 'highlight)
+      (set-buffer-modified-p t)
+      (save-buffer)
+      (should (equal (unibyte-string #x1f #x8b)
+                     (pdf-view-test-file-magic (buffer-file-name)))))))
+
+(ert-deftest pdf-view-save-leaves-the-buffer-in-step ()
+  "After saving a .pdf.gz the buffer shows what the file holds.
+
+The server reads a copy of a document Emacs had to decompress for it, and
+that copy has to be given the saved document too."
+  (skip-unless (executable-find "gzip"))
+  (pdf-view-test-with-compressed-pdf buffer
+    (with-current-buffer buffer
+      (let ((before (length (pdf-info-getannots))))
+        (pdf-info-addannot 1 '(0.1 0.1 0.5 0.15) 'highlight)
+        ;; `pdf-info-addannot' changes the document the server holds; the
+        ;; commands that call it are what mark the buffer.
+        (set-buffer-modified-p t)
+        (save-buffer)
+        (should (= (1+ before) (pdf-view-test-annotation-count (buffer-file-name))))
+        (should (= (1+ before) (length (pdf-info-getannots))))))))
+
+(ert-deftest pdf-view-save-twice-keeps-both-annotations ()
+  "Two saves in a row keep what each of them added."
+  (skip-unless (executable-find "gzip"))
+  (pdf-view-test-with-compressed-pdf buffer
+    (with-current-buffer buffer
+      (let ((before (length (pdf-info-getannots))))
+        (pdf-info-addannot 1 '(0.1 0.1 0.5 0.15) 'highlight)
+        ;; `pdf-info-addannot' changes the document the server holds; the
+        ;; commands that call it are what mark the buffer.
+        (set-buffer-modified-p t)
+        (save-buffer)
+        (pdf-info-addannot 1 '(0.1 0.2 0.5 0.25) 'highlight)
+        (set-buffer-modified-p t)
+        (save-buffer)
+        (should (= (+ 2 before) (pdf-view-test-annotation-count (buffer-file-name))))))))
