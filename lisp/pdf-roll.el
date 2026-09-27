@@ -445,9 +445,9 @@ It is also added to `revert-buffer-function'."
   :version 28.1
 
   (cond (pdf-view-roll-minor-mode
-         (setq-local face-remapping-alist '((default . pdf-roll-default))
-                     mwheel-scroll-up-function #'pdf-roll-scroll-forward
-                     mwheel-scroll-down-function #'pdf-roll-scroll-backward)
+         (setq-local face-remapping-alist '((default . pdf-roll-default)))
+         (setq-local mwheel-scroll-up-function #'pdf-roll-scroll-forward)
+         (setq-local mwheel-scroll-down-function #'pdf-roll-scroll-backward)
 
          (remove-hook 'window-configuration-change-hook 'image-mode-reapply-winprops t)
          (remove-hook 'window-configuration-change-hook 'pdf-view-redisplay-some-windows t)
@@ -466,8 +466,8 @@ It is also added to `revert-buffer-function'."
 
          (pdf-roll-initialize))
         (t
-         (setq-local mwheel-scroll-up-function #'pdf-view-scroll-up-or-next-page
-                     mwheel-scroll-down-function #'pdf-view-scroll-down-or-previous-page)
+         (setq-local mwheel-scroll-up-function #'pdf-view-scroll-up-or-next-page)
+         (setq-local mwheel-scroll-down-function #'pdf-view-scroll-down-or-previous-page)
 
          (add-hook 'window-configuration-change-hook 'image-mode-reapply-winprops nil t)
          (add-hook 'window-configuration-change-hook 'pdf-view-redisplay-some-windows nil t)
