@@ -75,6 +75,10 @@
           (gz (concat plain ".gz")))
      (unwind-protect
          (progn
+           ;; As `pdf-test-with-pdf' does: another test may have left the
+           ;; server dead.
+           (pdf-info-quit)
+           (pdf-info-process-assert-running t)
            (copy-file (expand-file-name "test.pdf") plain t)
            (unless (eq 0 (call-process "gzip" nil nil nil "-f" plain))
              (error "Could not gzip %s" plain))
@@ -86,6 +90,7 @@
                  (with-current-buffer ,var
                    (set-buffer-modified-p nil)
                    (let (kill-buffer-hook) (kill-buffer)))))))
+       (pdf-info-quit)
        (dolist (f (list plain gz))
          (when (file-exists-p f) (delete-file f))))))
 
@@ -162,6 +167,8 @@ that copy has to be given the saved document too."
          tarbuf member)
     (unwind-protect
         (progn
+          (pdf-info-quit)
+          (pdf-info-process-assert-running t)
           (copy-file (expand-file-name "test.pdf") (expand-file-name "doc.pdf" dir) t)
           (let ((default-directory dir))
             (unless (eq 0 (call-process "tar" nil nil nil "cf" tarfile "doc.pdf"))
@@ -191,6 +198,7 @@ that copy has to be given the saved document too."
               (should (= (1+ before)
                          (length (pdf-info-getannots
                                   nil (expand-file-name "doc.pdf" out))))))))
+      (pdf-info-quit)
       (dolist (b (list member tarbuf))
         (when (buffer-live-p b)
           (with-current-buffer b
