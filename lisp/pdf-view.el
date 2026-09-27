@@ -397,7 +397,7 @@ PNG images in Emacs buffers."
                    (not (and buffer-file-name
                              (file-readable-p buffer-file-name)
 			     (or (not (boundp 'epa-inhibit))
-				 epa-inhibit
+				 (bound-and-true-p epa-inhibit)
 				 (not (string-match epa-file-name-regexp
 						    buffer-file-name)))))))
              (pdf-tools-pdf-buffer-p))
