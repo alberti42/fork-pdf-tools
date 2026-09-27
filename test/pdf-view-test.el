@@ -161,6 +161,9 @@ that copy has to be given the saved document too."
 (ert-deftest pdf-view-save-a-pdf-inside-a-tar ()
   "Saving a PDF that lives in a tar puts it back into the archive."
   (skip-unless (executable-find "tar"))
+  ;; `tar-extract' displays the buffer, so a page is rendered, which an
+  ;; Emacs built without PNG cannot do.
+  (skip-unless (image-type-available-p 'png))
   (let* ((dir (make-temp-file "pdf-view-test-" t))
          (tarfile (expand-file-name "archive.tar" dir))
          (out (expand-file-name "out" dir))
