@@ -611,10 +611,25 @@ has put the document in the buffer for Emacs to write."
               ;; buffer is left alone -- which matters under
               ;; `pdf-view-roll-minor-mode\', whose page overlays carry
               ;; `evaporate\' and go with the text they hang on.
-              (with-temp-buffer
-                (set-buffer-multibyte nil)
-                (insert-file-contents-literally tempfile)
-                (let ((coding-system-for-write 'binary))
+              (let ((encrypt-to (and (boundp 'epa-file-encrypt-to)
+                                     epa-file-encrypt-to))
+                    (select-keys (and (boundp 'epa-file-select-keys)
+                                      epa-file-select-keys))
+                    (coding-system-for-write 'binary))
+                (with-temp-buffer
+                  (set-buffer-multibyte nil)
+                  ;; A handler reads what the buffer it writes from says, and
+                  ;; `epa-file-encrypt-to' -- whom to encrypt the document to
+                  ;; -- is one of the things it says.  A temporary buffer has
+                  ;; none of the original's local values, and epa would stop
+                  ;; and ask for the recipients.  Handing `write-region' the
+                  ;; document as a string from the original buffer would keep
+                  ;; them, and is 13 times slower at 0.6 MB, 20 at 37 MB.
+                  (when (boundp 'epa-file-encrypt-to)
+                    (setq-local epa-file-encrypt-to encrypt-to))
+                  (when (boundp 'epa-file-select-keys)
+                    (setq-local epa-file-select-keys select-keys))
+                  (insert-file-contents-literally tempfile)
                   (write-region nil nil target nil 'no-message)))
               (setq written t))
             ;; The server does not read the file for a document Emacs had to
