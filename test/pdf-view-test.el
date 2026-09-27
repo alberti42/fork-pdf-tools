@@ -205,3 +205,96 @@ that copy has to be given the saved document too."
             (set-buffer-modified-p nil)
             (let (kill-buffer-hook) (kill-buffer)))))
       (when (file-directory-p dir) (delete-directory dir t)))))
+
+(defconst pdf-view-test-gpg-uid "pdf-tools-test@example.invalid"
+  "The mock key the encrypted-document test encrypts to.")
+
+(defconst pdf-view-test-gpg-fingerprint
+  "3B19520851A05B7873843D3DBAB0869C7E18F8F7"
+  "Fingerprint of the key in test/gpg, so its owner trust can be set.
+Without that epa stops to ask whether an untrusted key may be used.")
+
+(defmacro pdf-view-test-with-gnupghome (&rest body)
+  "Run BODY with a GNUPGHOME holding only test/gpg's key.
+The key has no passphrase, so nothing asks for one."
+  (declare (indent 0) (debug t))
+  ;; Short, because the gpg-agent socket lives in here and a Unix socket
+  ;; path cannot exceed about a hundred characters -- which the temporary
+  ;; directory alone uses up on macOS.
+  `(let* ((home (make-temp-file (expand-file-name
+                                 "pdf-gh" (if (file-directory-p "/tmp")
+                                              "/tmp"
+                                            temporary-file-directory))
+                                t))
+          (process-environment (cons (concat "GNUPGHOME=" home)
+                                     process-environment)))
+     (set-file-modes home #o700)
+     (unwind-protect
+         (progn
+           (unless (eq 0 (call-process "gpg" nil nil nil "--batch" "--quiet"
+                                       "--import"
+                                       (expand-file-name
+                                        "gpg/test-key-no-passphrase.asc")))
+             (error "Could not import the test key"))
+           ;; Ultimate owner trust, or epa asks whether the key may be used.
+           (with-temp-buffer
+             (insert pdf-view-test-gpg-fingerprint ":6:\n")
+             (unless (eq 0 (call-process-region
+                            (point-min) (point-max) "gpg" nil nil nil
+                            "--batch" "--quiet" "--import-ownertrust"))
+               (error "Could not set the owner trust of the test key")))
+           ,@body)
+       (ignore-errors
+         (call-process "gpgconf" nil nil nil "--homedir" home "--kill" "all"))
+       (when (file-directory-p home) (delete-directory home t)))))
+
+(ert-deftest pdf-view-save-keeps-a-pdf-encrypted ()
+  "Saving a .pdf.gpg leaves an encrypted file with the annotation in it."
+  (skip-unless (and (executable-find "gpg")
+                    (file-exists-p (expand-file-name
+                                    "gpg/test-key-no-passphrase.asc"))))
+  (require 'epa-file)
+  (pdf-view-test-with-gnupghome
+    (let* ((dir (make-temp-file "pdf-view-test-" t))
+           (plain (expand-file-name "doc.pdf" dir))
+           (enc (concat plain ".gpg"))
+           (out (expand-file-name "out.pdf" dir))
+           buffer)
+      (unwind-protect
+          (progn
+            (pdf-info-quit)
+            (pdf-info-process-assert-running t)
+            (copy-file (expand-file-name "test.pdf") plain t)
+            (unless (eq 0 (call-process "gpg" nil nil nil "--batch" "--yes"
+                                        "--trust-model" "always" "--quiet"
+                                        "--recipient" pdf-view-test-gpg-uid
+                                        "--output" enc "--encrypt" plain))
+              (error "Could not encrypt %s" plain))
+            (epa-file-enable)
+            (add-to-list 'auto-mode-alist '("\\.[pP][dD][fF]\\'" . pdf-view-mode))
+            (setq buffer (find-file-noselect enc))
+            (with-current-buffer buffer
+              (should (derived-mode-p 'pdf-view-mode))
+              (setq-local epa-file-encrypt-to (list pdf-view-test-gpg-uid))
+              (let ((before (length (pdf-info-getannots))))
+                (pdf-info-addannot 1 '(0.1 0.1 0.5 0.15) 'highlight)
+                (set-buffer-modified-p t)
+                (save-buffer)
+                ;; Still OpenPGP: a plain PDF would start with "%PDF".
+                (should-not (equal "%PDF"
+                                   (with-temp-buffer
+                                     (set-buffer-multibyte nil)
+                                     (insert-file-contents-literally enc nil 0 4)
+                                     (buffer-string))))
+                ;; And it decrypts to the document with the annotation.
+                (unless (eq 0 (call-process "gpg" nil nil nil "--batch" "--yes"
+                                            "--quiet" "--output" out
+                                            "--decrypt" enc))
+                  (error "Could not decrypt %s" enc))
+                (should (= (1+ before) (length (pdf-info-getannots nil out)))))))
+        (when (buffer-live-p buffer)
+          (with-current-buffer buffer
+            (set-buffer-modified-p nil)
+            (let (kill-buffer-hook) (kill-buffer))))
+        (pdf-info-quit)
+        (when (file-directory-p dir) (delete-directory dir t))))))

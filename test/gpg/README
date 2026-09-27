@@ -1,0 +1,11 @@
+A GnuPG key pair for the tests, with no passphrase and no expiry.  It is
+here so that test/pdf-view-test.el can encrypt test.pdf and open the result,
+which is the only way to exercise the epa path without a pinentry.
+
+    pdf-tools test key (no passphrase, for tests only)
+    <pdf-tools-test@example.invalid>
+    ed25519/BAB0869C7E18F8F7
+
+It protects nothing and is known to everyone who can read this repository.
+Do not use it for anything.  The tests import it into a temporary GNUPGHOME
+and throw that away again.
