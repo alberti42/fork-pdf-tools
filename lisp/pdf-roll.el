@@ -223,7 +223,7 @@ overlays."
           (when prototype
             (overlay-put (copy-overlay prototype) 'window win))))
       (dolist (win-st pdf-roll--state)
-        (when-let ((win-old (car-safe win-st))
+        (when-let* ((win-old (car-safe win-st))
                    ((not (window-live-p win-old))))
           (remove-overlays (point-min) (point-max) 'window win-old)))
       (cl-callf2 cl-delete-if-not #'window-live-p pdf-roll--state :key #'car-safe)))

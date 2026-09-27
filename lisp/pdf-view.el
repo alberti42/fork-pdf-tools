@@ -1929,17 +1929,17 @@ See also `pdf-view-bookmark-make-record'."
                 (remove-hook hook show-fn-sym buf-chg-fns-p)
                 (unless (derived-mode-p 'pdf-view-mode)
                   (pdf-view-mode))
-                (when-let ((size (bookmark-prop-get
+                (when-let* ((size (bookmark-prop-get
                                   pdf-view--bookmark-to-restore 'size)))
                   (setq-local pdf-view-display-size size))
-                (when-let ((slice (bookmark-prop-get
+                (when-let* ((slice (bookmark-prop-get
                                    pdf-view--bookmark-to-restore 'slice)))
                   (apply 'pdf-view-set-slice slice))
-                (when-let ((page (bookmark-prop-get
+                (when-let* ((page (bookmark-prop-get
                                   pdf-view--bookmark-to-restore 'page))
                            ((numberp page)))
                   (pdf-view-goto-page page win))
-                (when-let ((origin (bookmark-prop-get
+                (when-let* ((origin (bookmark-prop-get
                                     pdf-view--bookmark-to-restore 'origin))
                            (size (pdf-view-image-size t win)))
                   (image-set-window-hscroll
