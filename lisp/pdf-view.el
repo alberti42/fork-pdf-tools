@@ -571,6 +571,14 @@ operating on a local copy of a remote file."
             ;; redisplay happening inside the pdf-info-close function
             ;; (while waiting for a response from the process.).
             (insert-file-contents tempfile nil nil nil t)
+            ;; The server does not read the file for a document Emacs had to
+            ;; hand it a copy of -- one that is compressed, encrypted or
+            ;; inside an archive.  Without this the copy keeps the document
+            ;; as it was before the save, the buffer goes back to that on the
+            ;; next command, and the save after this one writes it over the
+            ;; file.
+            (when pdf-view--buffer-file-name
+              (copy-file tempfile pdf-view--buffer-file-name t))
             (pdf-info-close pdf-view--server-file-name))
         (when (file-exists-p tempfile)
           (delete-file tempfile)))))
