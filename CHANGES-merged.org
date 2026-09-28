@@ -39,6 +39,9 @@ Each is merged at the head its pull request has.
 - fix(pdf-roll): redisplay every window when WINDOW is t.  Toggling
   ~pdf-view-midnight-minor-mode~ from another window, or from a hook, did not
   redraw the PDF until its window was selected.
+- fix(pdf-roll): put point on the page the window is set to start at.  A
+  window configuration saved before a revert, and restored after it with
+  ~jump-to-register~, showed a blank window until you scrolled.
 - fix(pdf-roll): give ~setq-local~ one pair at a time.  pdf-roll.el did not
   byte-compile on Emacs 26.3.
 
