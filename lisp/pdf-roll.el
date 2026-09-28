@@ -185,11 +185,14 @@ overlays."
   (cl-callf or (image-mode-window-get 'vscroll win) 0))
 
 (defun pdf-roll-redisplay (&optional window)
-  "Analogue of `pdf-view-redisplay' for WINDOW."
-  (setq window (if (windowp window) window (selected-window)))
-  (when (pdf-roll-page-overlay 1 window)
-    (setf (alist-get window pdf-roll--state) nil)
-    (force-window-update window)))
+  "Analogue of `pdf-view-redisplay' for WINDOW.
+If WINDOW is t, redisplay every window showing the current buffer."
+  (dolist (win (cond ((eq window t) (get-buffer-window-list nil nil t))
+                     ((windowp window) (list window))
+                     (t (list (selected-window)))))
+    (when (pdf-roll-page-overlay 1 win)
+      (setf (alist-get win pdf-roll--state) nil)
+      (force-window-update win))))
 
 (defun pdf-roll-pre-redisplay (win)
   "Handle modifications to the state in window WIN.
