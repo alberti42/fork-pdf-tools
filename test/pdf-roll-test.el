@@ -83,6 +83,35 @@
   (should (lookup-key pdf-view-roll-minor-mode-map
                       [remap pdf-view-next-line-or-next-page])))
 
+;;; Redisplay tests
+
+(ert-deftest pdf-roll-pre-redisplay-moves-point-to-the-page ()
+  "Test that point is put back on the page when nothing else changed.
+A window configuration restored after a revert brings point back at 1,
+and redisplay would then scroll the window to page 1."
+  (let ((pdf (generate-new-buffer "pdf")))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (let ((win (selected-window)))
+            (set-window-buffer win pdf)
+            (with-current-buffer pdf
+              (insert " \n \n \n ")
+              (dotimes (i 4)
+                (let ((ov (make-overlay (1+ (* 2 i)) (+ 2 (* 2 i)))))
+                  (overlay-put ov 'category (if (cl-evenp i) 'pdf-roll 'pdf-roll-margin))
+                  (overlay-put ov 'window win)))
+              (setq-local image-mode-winprops-alist nil)
+              (image-mode-window-put 'page 2 win)
+              (image-mode-window-put 'vscroll 0 win)
+              (setq-local pdf-roll--state
+                          (list (list win 2 (window-pixel-height win)
+                                      (window-pixel-width win) 0 nil)))
+              (set-window-point win 1)
+              (pdf-roll-pre-redisplay win)
+              (should (= (window-point win) (pdf-roll-page-to-pos 2))))))
+      (kill-buffer pdf))))
+
 ;;; Provide
 
 (provide 'pdf-roll-test)

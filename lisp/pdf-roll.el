@@ -221,7 +221,14 @@ It should be added to `pre-redisplay-functions' buffer locally."
                  (image-mode-window-put 'hscroll (window-hscroll win)) win)
         (set-window-vscroll win vscroll t)
         (set-window-hscroll win (or (image-mode-window-get 'hscroll win) 0))
-        (set-window-start win start t))
+        (set-window-start win start t)
+        ;; With NOFORCE, redisplay picks another start when point is not
+        ;; visible from this one, and point is set below only when the
+        ;; state has changed.  A window configuration saved before a
+        ;; revert brings point back at 1, where its markers collapsed, so
+        ;; the window would show the placeholder of page 1.
+        (unless (<= start (window-point win) (+ start 3))
+          (set-window-point win start)))
       (setq disable-point-adjustment t)
       (when (or size-changed page-changed vscroll-changed)
         (let ((old (image-mode-window-get 'displayed-pages win))
