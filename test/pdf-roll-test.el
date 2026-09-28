@@ -240,7 +240,10 @@ The selected window shows another buffer."
     (unwind-protect
         (save-window-excursion
           (delete-other-windows)
-          (let* ((win-a (selected-window))
+          ;; The batch frame of Emacs 26 and 27 is too short for three
+          ;; windows of the default minimum height.
+          (let* ((window-min-height 1)
+                 (win-a (selected-window))
                  (win-b (split-window win-a))
                  (win-c (split-window win-b)))
             (set-window-buffer win-a pdf)
