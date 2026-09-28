@@ -47,8 +47,8 @@ Each is merged at the head its pull request has.
 - fix(pdf-util): convert the page the window is showing.  ~pdf-annot-edit~
   failed in a window that had only drawn the page in roll mode:
   =Wrong type argument: char-or-string-p, nil=.
-- fix: use ~when-let*~, which ~when-let~ became.  Emacs 31 made ~when-let~
-  obsolete.
+- fix: use ~when-let*~, which ~when-let~ became, and fix(pdf-roll): use
+  ~if-let*~, which ~if-let~ became.  Emacs 31 made both obsolete.
 - feat(pdf-history): keep one provisional item while browsing a list.  While
   a follow mode moves the document, the history keeps one item for where
   browsing landed and replaces it on the next move, so =B= returns to the
