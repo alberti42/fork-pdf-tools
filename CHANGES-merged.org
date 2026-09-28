@@ -1,0 +1,68 @@
+#+TITLE: Changes on the merged branch
+
+What the =merged= branch carries on top of upstream [[https://github.com/vedang/pdf-tools][pdf-tools]] =master=
+(365f882, 2026-01-08).  The README says what the branch is for.
+
+* Pull requests open upstream
+
+Each is merged at the head its pull request has.
+
+- [[https://github.com/vedang/pdf-tools/pull/335][#335]] Handle compressed, encrypted or inside-archive PDFs (@piater).
+  The branch adds fixes to it, listed under [[*Fixes with no pull request yet][Fixes with no pull request yet]].
+- [[https://github.com/vedang/pdf-tools/pull/357][#357]] Make ~pdf-view-extract-region-image~ work again (@g-gundam).
+- [[https://github.com/vedang/pdf-tools/pull/361][#361]] fix(pdf-roll): don't draw a page on Emacs's region overlay.
+- [[https://github.com/vedang/pdf-tools/pull/362][#362]] fix(pdf-roll): survive a revert that lands during a page render.
+- [[https://github.com/vedang/pdf-tools/pull/364][#364]] fix(pdf-roll): scroll from the page the last scroll reached.
+- [[https://github.com/vedang/pdf-tools/pull/365][#365]] fix(pdf-misc): do not signal from the size indication mode-line.
+- [[https://github.com/vedang/pdf-tools/pull/366][#366]] fix(pdf-roll): send a negative scroll argument the other way, once.
+- [[https://github.com/vedang/pdf-tools/pull/367][#367]] fix(pdf-roll): forget the displayed pages of every window, not one.
+- [[https://github.com/vedang/pdf-tools/pull/370][#370]] Fix query completion after response preprocessing errors (@benthamite).
+- [[https://github.com/vedang/pdf-tools/pull/371][#371]] fix(pdf-history): return to the position a page was left at.
+
+* Fixes with no pull request yet
+
+** Compressed, encrypted or inside-archive PDFs, on top of #335
+
+- fix(pdf-view): keep the server's copy in step when saving.  Saving a
+  .pdf.gz twice, with one highlight added each time, ended with a file that
+  had the second and not the first.
+- fix(pdf-view): write through the file handlers, not through the buffer.
+  Saving no longer replaces the buffer, so it no longer costs the page
+  overlays under ~pdf-view-roll-minor-mode~.
+- fix(pdf-view): give the write epa's settings from this buffer.  Saving an
+  encrypted PDF stopped to ask for the recipients on every save.
+- fix(pdf-view): ask for ~epa-inhibit~ the way that does not warn.
+- Tests for saving a compressed, a gpg-encrypted and an in-archive document.
+
+** pdf-roll
+
+- fix(pdf-roll): redisplay every window when WINDOW is t.  Toggling
+  ~pdf-view-midnight-minor-mode~ from another window, or from a hook, did not
+  redraw the PDF until its window was selected.
+- fix(pdf-roll): give ~setq-local~ one pair at a time.  pdf-roll.el did not
+  byte-compile on Emacs 26.3.
+
+** Other
+
+- fix(pdf-util): convert the page the window is showing.  ~pdf-annot-edit~
+  failed in a window that had only drawn the page in roll mode:
+  =Wrong type argument: char-or-string-p, nil=.
+- fix: use ~when-let*~, which ~when-let~ became.  Emacs 31 made ~when-let~
+  obsolete.
+- feat(pdf-history): keep one provisional item while browsing a list.  While
+  a follow mode moves the document, the history keeps one item for where
+  browsing landed and replaces it on the next move, so =B= returns to the
+  position you were reading.  This changes what the history records, so it
+  will get its own pull request, after #371.
+
+* Documentation
+
+- The README starts with a note saying what this branch is.
+- doc: drop the links to pdftools.wiki, whose domain has lapsed.
+
+* CI
+
+- ci: also run the test workflow on the merged branch.
+- ci: test on Emacs 30 and 31 as well.
+- ci(windows): drop the MSYS2 Emacs package, which no longer exists.
+- ci: build the package tar on the Emacs snapshot again.

@@ -5,8 +5,8 @@
 #+Maintainer_Email: vedang.manerikar@gmail.com
 
 This is the =merged= branch of a fork of [[https://github.com/vedang/pdf-tools][pdf-tools]], not the project itself.
-It is upstream =master= with the fixes from the pull requests open there
-applied on top: [[https://github.com/vedang/pdf-tools/pull/357][#357]], [[https://github.com/vedang/pdf-tools/pull/361][#361]], [[https://github.com/vedang/pdf-tools/pull/362][#362]], [[https://github.com/vedang/pdf-tools/pull/364][#364]], [[https://github.com/vedang/pdf-tools/pull/365][#365]], [[https://github.com/vedang/pdf-tools/pull/366][#366]], [[https://github.com/vedang/pdf-tools/pull/367][#367]], [[https://github.com/vedang/pdf-tools/pull/370][#370]] and [[https://github.com/vedang/pdf-tools/pull/371][#371]].
+It is upstream =master= with the pull requests open there applied on top, and
+further fixes that have no pull request yet.  [[file:CHANGES-merged.org][CHANGES-merged.org]] lists them.
 Everything else below is the upstream README.
 
 [[https://github.com/alberti42/fork-pdf-tools/actions/workflows/test.yml][https://github.com/alberti42/fork-pdf-tools/actions/workflows/test.yml/badge.svg?branch=merged]]
