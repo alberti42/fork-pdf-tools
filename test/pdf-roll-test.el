@@ -230,6 +230,37 @@ naming pages the buffer no longer holds an overlay for."
       (should-not (cdr (assq 'displayed-pages (cdr winprops)))))))
 
 
+;;; Redisplay tests
+
+(ert-deftest pdf-roll-redisplay-t-reaches-every-window ()
+  "Test that WINDOW t redisplays every window showing the buffer.
+The selected window shows another buffer."
+  (let ((pdf (generate-new-buffer "pdf"))
+        (other (generate-new-buffer "other")))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (let* ((win-a (selected-window))
+                 (win-b (split-window win-a))
+                 (win-c (split-window win-b)))
+            (set-window-buffer win-a pdf)
+            (set-window-buffer win-b pdf)
+            (set-window-buffer win-c other)
+            (select-window win-c)
+            (with-current-buffer pdf
+              (insert "    ")
+              (setq-local pdf-roll--state
+                          (list t (list win-a 'state) (list win-b 'state)))
+              (dolist (win (list win-a win-b))
+                (let ((ov (make-overlay 1 2)))
+                  (overlay-put ov 'category 'pdf-roll)
+                  (overlay-put ov 'window win)))
+              (pdf-roll-redisplay t)
+              (should-not (alist-get win-a pdf-roll--state))
+              (should-not (alist-get win-b pdf-roll--state)))))
+      (kill-buffer pdf)
+      (kill-buffer other))))
+
 ;;; Provide
 
 (provide 'pdf-roll-test)
