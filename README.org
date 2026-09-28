@@ -4,12 +4,13 @@
 #+Maintainer: Vedang Manerikar
 #+Maintainer_Email: vedang.manerikar@gmail.com
 
+[[https://www.gnu.org/software/emacs/][https://img.shields.io/badge/Made%20for-GNU%20Emacs-7F5AB6.svg?logo=gnuemacs&logoColor=white]]
+[[https://github.com/alberti42/fork-pdf-tools/actions/workflows/test.yml][https://github.com/alberti42/fork-pdf-tools/actions/workflows/test.yml/badge.svg?branch=merged]]
+[[file:COPYING][https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg]]
+
 This is the =merged= branch of a fork of [[https://github.com/vedang/pdf-tools][pdf-tools]], not the project itself.
 It is upstream =master= with the pull requests open there applied on top, and
 further fixes that have no pull request yet.  [[file:CHANGES-merged.org][CHANGES-merged.org]] lists them.
-Everything else below is the upstream README.
-
-[[https://github.com/alberti42/fork-pdf-tools/actions/workflows/test.yml][https://github.com/alberti42/fork-pdf-tools/actions/workflows/test.yml/badge.svg?branch=merged]]
 
 #+begin_src emacs-lisp
 (use-package pdf-tools
@@ -26,6 +27,8 @@ worked.  They are not releases of pdf-tools: the package still says version
 Please report bugs to [[https://github.com/vedang/pdf-tools/issues][the project]] rather than here, so that everyone sees
 them and the fix can go to the same place. [[https://github.com/vedang/pdf-tools/issues/372][Issue 372]] says what this branch is
 for and how to ask for a pull request to be added to it.
+
+From the table of contents on, this file is the upstream README.
 
 * Table of Contents                                            :noexport:TOC_3_gh:
 - [[#about-pdf-tools][About PDF Tools]]
