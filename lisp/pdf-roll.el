@@ -109,8 +109,8 @@ before it made."
 (defun pdf-roll-maybe-slice-image (image &optional window inhibit-slice-p)
   "Return a sliced IMAGE if `pdf-view-current-slice' in WINDOW is non-nil.
 If INHIBIT-SLICE-P is non-nil, disregard `pdf-view-current-slice'."
-  (if-let ((slice (pdf-view-current-slice window))
-           ((not inhibit-slice-p)))
+  (if-let* ((slice (pdf-view-current-slice window))
+            ((not inhibit-slice-p)))
       (list (cons 'slice
                   (pdf-util-scale slice (image-size image t) 'round))
             image)
