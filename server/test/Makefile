@@ -85,4 +85,4 @@ print-failing: FAILING_OS := $(patsubst %.Dockerfile.in.FAILING, %, \
 print-failing:
 	@echo List of Operating systems where server compilation is not tested:
 	@for os in $(FAILING_OS); do echo - $$os; done | sort
-	@echo PLEASE help support your favorite OS! More details at: https://pdftools.wiki/A401543C
+	@echo PLEASE help support your favorite OS! More details at: https://github.com/vedang/pdf-tools#add-a-dockerfile-to-automate-server-compilation-testing

@@ -27,8 +27,6 @@ Please report bugs to [[https://github.com/vedang/pdf-tools/issues][the project]
 them and the fix can go to the same place. [[https://github.com/vedang/pdf-tools/issues/372][Issue 372]] says what this branch is
 for and how to ask for a pull request to be added to it.
 
-The ~pdf-tools~ Wiki is maintained at https://pdftools.wiki. Head to the site if you find it easier to navigate a website for reading a manual. All the topics on the site are listed at https://pdftools.wiki/impulse.
-
 * Table of Contents                                            :noexport:TOC_3_gh:
 - [[#about-pdf-tools][About PDF Tools]]
 - [[#installing-pdf-tools][Installing pdf-tools]]
