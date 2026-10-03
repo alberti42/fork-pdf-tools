@@ -263,6 +263,16 @@ Must be one of `glyph', `word', or `line'."
 ;; * Internal variables and macros
 ;; * ================================================================== *
 
+(defvar-local pdf-view--mode-line-number-of-pages nil
+  "The number of pages the mode line reports, or nil if it is not known.
+
+See `pdf-view-read-mode-line-data'.")
+
+(defvar-local pdf-view--mode-line-pagelabels nil
+  "The page labels the mode line reports, or nil if the document has none.
+
+See `pdf-view-read-mode-line-data'.")
+
 (defvar-local pdf-view-active-region nil
   "The active region as a cons cell of page and list of edges.
 
@@ -404,6 +414,7 @@ PNG images in Emacs buffers."
   ;; pdf-info.el (e.g. from the mode-line during redisplay during
   ;; waiting for process output).
   (pdf-view-decrypt-document)
+  (pdf-view-read-mode-line-data)
 
   ;; Setup scroll functions
   (if (boundp 'mwheel-scroll-up-function) ; not --without-x build
@@ -444,18 +455,25 @@ PNG images in Emacs buffers."
   (remove-overlays (point-min) (point-max) 'pdf-view t) ;Just in case.
 
   ;; Setup other local variables.
+  ;; Both `:eval' forms run while Emacs is displaying, so they read what
+  ;; `pdf-view-read-mode-line-data' stored rather than ask the server, and
+  ;; they answer for every value those variables can hold rather than let
+  ;; redisplay report an error and drop the rest of the line.
   (setq-local mode-line-position
               '(" " pdf-view-mode-line-position-prefix
-                ;; Show page label when enabled and available,
-                ;; otherwise show numeric page. Guard against errors.
+                ;; The page label where the document has one and they are
+                ;; wanted, otherwise the page number.
                 (:eval
-                 (or (and pdf-view-mode-line-position-use-labels
-                          (ignore-errors (pdf-view-current-pagelabel)))
-                     (number-to-string (pdf-view-current-page))))
-                ;; Avoid errors during redisplay.
-                "/" (:eval (or (ignore-errors
-                                 (number-to-string (pdf-cache-number-of-pages)))
-                               "???"))))
+                 (let ((page (pdf-view-current-page)))
+                   (cond
+                    ((null page) "?")
+                    ((and pdf-view-mode-line-position-use-labels
+                          (nth (1- page) pdf-view--mode-line-pagelabels)))
+                    (t (number-to-string page)))))
+                "/" (:eval (if pdf-view--mode-line-number-of-pages
+                               (number-to-string
+                                pdf-view--mode-line-number-of-pages)
+                             "???"))))
   (setq-local auto-hscroll-mode nil)
   (setq-local pdf-view--server-file-name (pdf-view-buffer-file-name))
   ;; High values of scroll-conservatively seem to trigger
@@ -557,6 +575,26 @@ PNG images in Emacs buffers."
         (password-cache-add key password))))
   nil)
 
+(defun pdf-view-read-mode-line-data ()
+  "Read what the mode line reports about the document, and store it.
+
+The mode line is evaluated while Emacs is displaying, so it may not ask
+the server: a query waits in `accept-process-output', which runs timers
+and other processes' filters and sentinels in the middle of a redisplay.
+The number of pages and the page labels are read here instead, where
+waiting is allowed.
+
+Both are properties of the document the buffer has open, so they are read
+whenever it is opened.  An external process writing the file -- pdflatex,
+say -- does not change them until the buffer is reverted, which closes the
+document and calls this again from `pdf-view-revert-buffer'."
+  (setq pdf-view--mode-line-number-of-pages (pdf-info-number-of-pages)
+        pdf-view--mode-line-pagelabels
+        ;; A virtual document has no page labels of its own, and says so.
+        (condition-case nil
+            (pdf-info-pagelabels)
+          (pdf-virtual-unsupported-operation nil))))
+
 (defun pdf-view-buffer-file-name ()
   "Return the local filename of the PDF in the current buffer.
 
@@ -618,6 +656,8 @@ Optional parameters IGNORE-AUTO and NOCONFIRM are defined as in
     (prog1
         (revert-buffer ignore-auto noconfirm 'preserve-modes)
       (pdf-view-decrypt-document)
+      ;; The file may have been rewritten with a different number of pages.
+      (pdf-view-read-mode-line-data)
       (pdf-view-redisplay t))))
 
 (defun pdf-view-close-document ()
