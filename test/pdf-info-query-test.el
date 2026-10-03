@@ -4,19 +4,25 @@
 (require 'pdf-info)
 
 (defmacro pdf-info-test-with-query-process (&rest body)
-  "Run BODY with a private native transaction queue and response timer."
+  "Run BODY with a private native transaction queue answering every query.
+
+Sending a query answers it, through the queue's own filter.  The response
+may not be delivered from a timer: a synchronous `pdf-info-query' waits
+with an integer JUST-THIS-ONE, which reads only its process and runs no
+timers, because that wait is reachable from a mode-line construct and
+would otherwise run arbitrary Lisp in the middle of a redisplay.  A timer
+here would never fire, and neither would the `with-timeout' meant to bound
+the test, so the test would hang rather than fail."
   (declare (indent 0))
   `(let* ((process (make-process :name "pdf-info-query-test"
                                  :command '("cat") :noquery t))
           (pdf-info--queue (tq-create process))
-          (pdf-info-log nil)
-          timer)
+          (pdf-info-log nil))
      (unwind-protect
-         (cl-letf (((symbol-function 'process-send-string) #'ignore))
-           (setq timer (run-at-time 0 nil
-                                   (lambda () (tq-filter pdf-info--queue "OK\n.\n"))))
+         (cl-letf (((symbol-function 'process-send-string)
+                    (lambda (&rest _)
+                      (tq-filter pdf-info--queue "OK\n.\n"))))
            ,@body)
-       (when timer (cancel-timer timer))
        (tq-close pdf-info--queue))))
 
 (ert-deftest pdf-info-query-preprocessing-error-completes-synchronous-request ()
