@@ -24,14 +24,18 @@ the window has not drawn it, and a draw waits for the server."
         (should-not queried)))))
 
 (ert-deftest pdf-misc-size-indication-measures-a-drawn-page ()
-  "A page the window already shows is measured, and nothing is drawn."
+  "A page the window already shows is measured, and nothing is drawn.
+
+The display property outside roll mode is the image specification itself,
+not a list naming it."
   (pdf-test-with-test-pdf
-    (let ((image (create-image (make-string 16 ?x) 'png t :width 10 :height 400))
+    (let ((image '(image :type png :width 10 :height 400))
           drawn)
       (cl-letf (((symbol-function 'pdf-view-display-page)
                  (lambda (&rest _) (setq drawn t)))
                 ((symbol-function 'image-get-display-property) (lambda () image))
                 ((symbol-function 'image-display-size) (lambda (&rest _) '(10 . 400))))
         (setq-local pdf-view-roll-minor-mode nil)
-        (should (stringp (pdf-misc-size-indication)))
+        (should (pdf-view-page-displayed-p))
+        (should-not (equal "" (pdf-misc-size-indication)))
         (should-not drawn)))))

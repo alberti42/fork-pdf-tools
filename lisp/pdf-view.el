@@ -1163,9 +1163,11 @@ nothing, so it may be called while Emacs is displaying."
                     (overlay (and page (pdf-roll-page-overlay page window))))
                (and overlay (overlay-get overlay 'display)))
            (image-get-display-property))))
-    (and (if (consp display-prop)
-             (assoc 'image display-prop)
-           display-prop)
+    ;; A display property may name more than the image, and may also be the
+    ;; image specification itself, as it is outside roll mode.
+    (and (or (and (consp display-prop)
+                  (assoc 'image display-prop))
+             display-prop)
          t)))
 
 (defun pdf-view-image-size (&optional displayed-p window page)
