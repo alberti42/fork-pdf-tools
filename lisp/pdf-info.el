@@ -391,7 +391,11 @@ the transmission-queue and arguments to the callback."
       (while (and (not done)
                   (eq (process-status (pdf-info-process))
                       'run))
-        (accept-process-output (pdf-info-process) 0.01))
+        ;; An integer JUST-THIS-ONE reads only this process and runs no
+        ;; timers.  A query made while Emacs is displaying -- from a
+        ;; mode-line `:eval', or from `pre-redisplay-functions' -- must not
+        ;; let a timer run here: see the commit that added this.
+        (accept-process-output (pdf-info-process) 0.01 nil 1))
       (when (and (not done)
                  (not (eq (process-status (pdf-info-process))
                           'run))
@@ -903,7 +907,7 @@ i.e. `pdf-info-asynchronous' is non-nil, transparently.
          (while (and (not ,done)
                      (eq (process-status (pdf-info-process))
                          'run))
-           (accept-process-output (pdf-info-process) 0.01))
+           (accept-process-output (pdf-info-process) 0.01 nil 1))
          (when (and (not ,done)
                     (not (eq (process-status (pdf-info-process))
                              'run)))
