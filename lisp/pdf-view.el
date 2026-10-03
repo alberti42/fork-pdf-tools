@@ -1201,6 +1201,27 @@ See also `pdf-view-use-imagemagick'."
       :map hotspots
       :pointer 'arrow)))
 
+(defun pdf-view-page-displayed-p (&optional window page)
+  "Return non-nil if WINDOW already shows an image for PAGE.
+
+WINDOW defaults to the selected one and PAGE to the page WINDOW is on.
+Unlike `pdf-view-image-size', this draws nothing and asks the server
+nothing, so it may be called while Emacs is displaying."
+  (let ((display-prop
+         (if pdf-view-roll-minor-mode
+             (let* ((window (if (windowp window) window (selected-window)))
+                    (page (or page (pdf-view-current-page window)))
+                    ;; The overlay is gone while the ones a `revert-buffer'
+                    ;; collapsed are being rebuilt, although the window still
+                    ;; counts the page among those it has drawn.
+                    (overlay (and page (pdf-roll-page-overlay page window))))
+               (and overlay (overlay-get overlay 'display)))
+           (image-get-display-property))))
+    (and (if (consp display-prop)
+             (assoc 'image display-prop)
+           display-prop)
+         t)))
+
 (defun pdf-view-displayed-image (&optional window page)
   "Return the image WINDOW displays for PAGE.
 
