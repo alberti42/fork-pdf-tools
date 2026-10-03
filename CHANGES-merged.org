@@ -13,10 +13,10 @@ Each is merged at the head its pull request has.
 - [[https://github.com/vedang/pdf-tools/pull/361][#361]] fix(pdf-roll): don't draw a page on Emacs's region overlay (@alberti42).  Taken as it stands (branch =fix/roll-region-overlay-adoption=).
 - [[https://github.com/vedang/pdf-tools/pull/362][#362]] fix(pdf-roll): survive a revert that lands during a page render (@alberti42).  Taken as it stands (branch =fix/roll-revert-during-render=).
 - [[https://github.com/vedang/pdf-tools/pull/364][#364]] fix(pdf-roll): scroll from the page the last scroll reached (@alberti42).  Taken as it stands (branch =fix/roll-scroll-stale-window-start=).
-- [[https://github.com/vedang/pdf-tools/pull/365][#365]] fix(pdf-misc): do not signal from the size indication mode-line (@alberti42).  Taken as it stands (branch =fix/misc-size-indication-no-error=).
+- [[https://github.com/vedang/pdf-tools/pull/365][#365]] fix(pdf-misc): do not signal from the size indication mode-line (@alberti42).  Merged with one commit on top that replaces its ~ignore-errors~, listed under [[*Mode line][Mode line]] (branch =fix/misc-size-indication-no-error=).
 - [[https://github.com/vedang/pdf-tools/pull/366][#366]] fix(pdf-roll): send a negative scroll argument the other way, once (@alberti42).  Taken as it stands (branch =fix/roll-scroll-negative-arg=).
 - [[https://github.com/vedang/pdf-tools/pull/367][#367]] fix(pdf-roll): forget the displayed pages of every window, not one (@alberti42).  Taken as it stands (branch =fix/roll-displayed-pages-all-windows=).
-- [[https://github.com/vedang/pdf-tools/pull/370][#370]] Fix query completion after response preprocessing errors (@benthamite).  Taken as it stands; its own three tests pass here.  Merged from the pull request, no branch here.
+- [[https://github.com/vedang/pdf-tools/pull/370][#370]] Fix query completion after response preprocessing errors (@benthamite).  Its code taken as it stands; its tests answer the server from a timer, which the first fix under [[*Mode line][Mode line]] stops a synchronous query running, so their harness now answers from the filter instead.  Merged from the pull request, no branch here.
 - [[https://github.com/vedang/pdf-tools/pull/371][#371]] fix(pdf-history): return to the position a page was left at (@alberti42).  Taken as it stands (branch =fix/history-restore-position=).
 
 * Fixes with no pull request yet
@@ -38,6 +38,15 @@ On =fix/compressed-encrypted-pdfs=, which also carries @piater's two commits.
 - fix(pdf-roll): redisplay every window when WINDOW is t.  Toggling ~pdf-view-midnight-minor-mode~ from another window, or from a hook, did not redraw the PDF until its window was selected.  Reported upstream as [[https://github.com/vedang/pdf-tools/issues/373][issue 373]].  (branch =fix/roll-redisplay-all-windows=)
 - fix(pdf-roll): put point on the page the window is set to start at.  A window configuration saved before a revert, and restored after it with ~jump-to-register~, showed a blank window until you scrolled.  (branch =fix/roll-point-after-restore=)
 - fix(pdf-roll): give ~setq-local~ one pair at a time.  pdf-roll.el did not byte-compile on Emacs 26.3.  (branch =fix/roll-setq-local-one-pair=)
+
+** Mode line
+
+A mode-line construct is evaluated while Emacs is displaying, so it may neither draw a page nor wait for the server: a wait runs timers and other processes' filters and sentinels, and ~display_mode_line~ holds a pointer into the glyph matrix across the construct, so Lisp that reallocates the matrix there -- ~set-window-vscroll~ does -- leaves it dangling and Emacs crashes.  Reported as Emacs [[https://debbugs.gnu.org/cgi/bugreport.cgi?bug=81903][bug#81903]].
+
+- fix(pdf-info): run no timers while a synchronous query waits.  ~accept-process-output~ is given an integer JUST-THIS-ONE, so the wait reads its own process and nothing else.  (branch =fix/info-query-no-timers-while-waiting=)
+- fix(pdf-misc): measure only the page the window already shows.  ~pdf-misc-size-indication~ asked ~pdf-view-image-size~, which draws the page under ~pdf-view-roll-minor-mode~ when the window has not drawn it yet.  (branch =fix/misc-size-indication-no-error=, on top of #365)
+- fix(pdf-view): read the mode-line data when the document opens.  Both ~:eval~ forms in ~mode-line-position~ asked the server -- the page labels on every redisplay, the number of pages after every revert -- and both ~ignore-errors~ are gone with them.  (branch =fix/mode-line-no-server-query=)
+- test(pdf-info): answer the query from the filter, not from a timer.  @benthamite's tests in #370 hang once the first of these lands.  Only on =merged=: it belongs with whichever of the two reaches upstream second.
 
 ** Other
 
