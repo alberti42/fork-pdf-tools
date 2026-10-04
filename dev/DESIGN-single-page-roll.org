@@ -37,7 +37,7 @@ What the single-page view must do, taken from =pdf-view-mode-map= (=pdf-view.el=
 | =M-g g= (=goto-line=), =M-g l= | go to page, to label | same |
 | =SPC=, =S-SPC=, =DEL= | scroll a screen; at the page's edge turn the page, landing at the top (forward) or the bottom (backward) | scroll a screen across pages (one line before the decision below) |
 | =C-n=, =C-p=, =<down>=, =<up>= | scroll a line; at the bottom or top turn the page if =pdf-view-turn-page-at-top-and-bottom= | scroll a line across pages |
-| =RET= | =image-next-line=: a line down, no page turn | =image-next-line= on the current page ? |
+| =RET= | =image-next-line=: a line down, no page turn | undefined since 2026-10-04; users can bind it |
 | Mouse wheel | =pdf-view-scroll-up-or-next-page= with a line count: turns the page at the bottom or top if =pdf-view-turn-page-at-top-and-bottom= | =pdf-roll-scroll-forward= across pages |
 | At fit-height or fit-page | any scroll turns the page (=pdf-view.el:977= and =1002=, a workaround for rounding) | scrolls across pages |
 | =S-<next>=, =S-<prior>= | not bound | scroll a screen across pages |
@@ -93,6 +93,7 @@ Inside =pdf-roll.el=, =pdf-roll--get-display-property= (=pdf-roll.el:607=) advis
 
 - 2026-10-04: =SPC=, =S-SPC= and =DEL= scroll a screen in roll mode, as in plain mode; users who want a line can rebind them.  Done in the commit that adds this section.
 - 2026-10-04: upstream #345 is left for last.
+- 2026-10-04: =RET= is not bound by pdf-tools; it was =image-next-line=, a line scroll that never left the page.
 - 2026-10-04: the end state.  =pdf-view-mode= is the continuous view, drawn by the machinery of =pdf-roll.el=.  The single-page experience is a minor mode on top of it, =pdf-view-single-page-mode=; users who want it add it to =pdf-view-mode-hook=.  The plain-mode path is deleted.
 - 2026-10-04: =pdf-view-roll-minor-mode= is then either deleted or kept as an obsolete name that warns when used -- never one that silently does nothing.
 - 2026-10-04: in the single-page view, =C-n= scrolls one line down the page; if the page has no line left to scroll, because its bottom is already at the bottom of the window, =C-n= turns to the next page if =pdf-view-turn-page-at-top-and-bottom= is non-nil, and otherwise does nothing.  =C-p= is the same at the top.  The rule does not depend on the page fitting the window.  Plain mode instead scrolls a page that fits up into blank space below it; that is not reproduced.

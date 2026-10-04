@@ -382,7 +382,9 @@ regarding display of the region in the later function.")
     (define-key map [remap end-of-buffer]       'pdf-view-last-page)
     (define-key map [remap goto-line] 'pdf-view-goto-page)
     (define-key map (kbd "M-g l")     'pdf-view-goto-label)
-    (define-key map (kbd "RET")       'image-next-line)
+    ;; Undefined rather than unbound: the parent `image-mode-map' binds it
+    ;; to `image-toggle-animation', which does nothing for a PDF.
+    (define-key map (kbd "RET")       'undefined)
     (define-key map [remap mouse-set-point] 'ignore)
     (define-key map (kbd "S-<next>")  'pdf-roll-scroll-screen-forward)
     (define-key map (kbd "S-<prior>") 'pdf-roll-scroll-screen-backward)
