@@ -550,6 +550,12 @@ PNG images in Emacs buffers."
             'pdf-view-new-window-function nil t)
   (image-mode-setup-winprops)
 
+  ;; Pages are drawn by pdf-roll: continuously, or one at a time with
+  ;; `pdf-view-single-page-mode'.  pdf-roll requires this file, so it is
+  ;; loaded here rather than at the top.
+  (require 'pdf-roll)
+  (pdf-view-roll-minor-mode 1)
+
   ;; Issue a warning in the future about incompatible modes.
   (run-with-timer 1 nil (lambda (buffer)
                           (when (buffer-live-p buffer)
