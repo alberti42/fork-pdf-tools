@@ -435,11 +435,10 @@ server."
       (should (equal (+ 2 generation) pdf-view--document-generation)))))
 
 (ert-deftest pdf-view-page-displayed-p-a-space-is-not-a-page ()
-  "In roll mode a page not drawn yet shows a `space', not an image."
+  "A page not drawn yet shows a `space', not an image."
   (with-temp-buffer
     (insert " ")
-    (let ((overlay (make-overlay 1 2))
-          (pdf-view-roll-minor-mode t))
+    (let ((overlay (make-overlay 1 2)))
       (cl-letf (((symbol-function 'pdf-roll-page-overlay) (lambda (&rest _) overlay)))
         (overlay-put overlay 'display '(space :width 25 :height 1000))
         (should-not (pdf-view-page-displayed-p nil 1))
@@ -454,7 +453,6 @@ server."
   (with-temp-buffer
     (insert " ")
     (let ((overlay (make-overlay 1 2))
-          (pdf-view-roll-minor-mode t)
           (pdf-view--document-generation 3))
       (cl-letf (((symbol-function 'pdf-roll-page-overlay) (lambda (&rest _) overlay)))
         (overlay-put overlay 'pdf-view-generation 3)

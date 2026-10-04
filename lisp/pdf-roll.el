@@ -95,10 +95,9 @@ region highlight too (see `redisplay--highlight-overlay-function')."
 a command.  `pdf-roll-scroll-forward' and `pdf-roll-scroll-backward' record
 where they arrived in `pdf-view-current-page' and leave `window-start' to
 `pdf-roll-pre-redisplay', which runs once per redisplay.  So a command that
-scrolls more than once, such as `pdf-view-next-line-or-next-page' with an
-argument or a key bound to several scrolls, would read a `window-start' that
-still names the page it started on, and undo the page change the scroll
-before it made."
+scrolls more than once, such as a key bound to several scrolls, would read a
+`window-start' that still names the page it started on, and undo the page
+change the scroll before it made."
   (pdf-roll-page-to-pos (pdf-view-current-page window)))
 
 (defun pdf-roll-set-vscroll (vscroll win)
@@ -492,7 +491,7 @@ the buffer may no longer hold an overlay for."
     (image-mode-window-put 'displayed-pages nil winprops)))
 
 (defun pdf-roll-initialize (&rest _args)
-  "Fun to initialize `pdf-view-roll-minor-mode'.
+  "Make the page and margin overlays of the buffer anew.
 `pdf-roll-revert-buffer' calls it too, when the number of pages changed."
   (if pdf-roll--delay-revert
       ;; The timer has to be given the buffer: it runs with whatever buffer
@@ -556,66 +555,39 @@ the revert function, so they are run here."
       (run-hooks 'after-revert-hook)
       t)))
 
-;;;###autoload
-(define-minor-mode pdf-view-roll-minor-mode
-  "If enabled display document on a virtual scroll providing continuous scrolling."
-  :lighter " Continuous"
-  :keymap (let ((map (make-sparse-keymap)))
-            (define-key map [remap pdf-view-previous-line-or-previous-page] 'pdf-roll-scroll-backward)
-            (define-key map [remap pdf-view-next-line-or-next-page] 'pdf-roll-scroll-forward)
-            ;; SPC, S-SPC, DEL, C-v and M-v scroll a screen, as they do
-            ;; outside roll mode.
-            (define-key map [remap pdf-view-scroll-down-or-previous-page] 'pdf-roll-scroll-screen-backward)
-            (define-key map [remap pdf-view-scroll-up-or-next-page] 'pdf-roll-scroll-screen-forward)
-            (define-key map [remap mouse-set-point] 'ignore)
-            (define-key map (kbd "S-<next>") 'pdf-roll-scroll-screen-forward)
-            (define-key map (kbd "S-<prior>") 'pdf-roll-scroll-screen-backward)
-            map)
-  :version 28.1
+;;; Setup
 
-  (cond (pdf-view-roll-minor-mode
-         (setq-local face-remapping-alist '((default . pdf-roll-default)))
-         (setq-local mwheel-scroll-up-function #'pdf-roll-scroll-forward)
-         (setq-local mwheel-scroll-down-function #'pdf-roll-scroll-backward)
+(defun pdf-roll-setup ()
+  "Set the current buffer up to have its pages drawn by pdf-roll.
+`pdf-view-mode' calls this."
+  (setq-local face-remapping-alist '((default . pdf-roll-default)))
+  (setq-local mwheel-scroll-up-function #'pdf-roll-scroll-forward)
+  (setq-local mwheel-scroll-down-function #'pdf-roll-scroll-backward)
+  (remove-hook 'window-configuration-change-hook 'image-mode-reapply-winprops t)
+  (add-hook 'pre-redisplay-functions 'pdf-roll-pre-redisplay nil t)
+  (add-hook 'pdf-roll-after-change-page-hook 'pdf-history-before-change-page-hook nil t)
+  (make-local-variable 'pdf-roll--state)
+  (when (local-variable-p 'pixel-scroll-precision-mode)
+    (kill-local-variable 'pixel-scroll-precision-mode)
+    (kill-local-variable 'mwheel-coalesce-scroll-events))
+  (pdf-roll-initialize))
 
-         (remove-hook 'window-configuration-change-hook 'image-mode-reapply-winprops t)
-         (remove-hook 'window-configuration-change-hook 'pdf-view-redisplay-some-windows t)
-         (remove-hook 'image-mode-new-window-functions#'pdf-view-new-window-function t)
+(defvar pdf-roll--obsolete-mode-warned nil
+  "Non-nil once `pdf-view-roll-minor-mode' has warned in this session.")
 
-         (add-hook 'pre-redisplay-functions 'pdf-roll-pre-redisplay nil t)
-         (add-hook 'pdf-roll-after-change-page-hook 'pdf-history-before-change-page-hook nil t)
-
-         (make-local-variable 'pdf-roll--state)
-
-         (when (local-variable-p 'pixel-scroll-precision-mode)
-           (kill-local-variable 'pixel-scroll-precision-mode)
-           (kill-local-variable 'mwheel-coalesce-scroll-events))
-
-         (pdf-roll-initialize))
-        (t
-         (when pdf-view-single-page-mode
-           (pdf-view-single-page-mode -1))
-         (setq-local mwheel-scroll-up-function #'pdf-view-scroll-up-or-next-page)
-         (setq-local mwheel-scroll-down-function #'pdf-view-scroll-down-or-previous-page)
-
-         (add-hook 'window-configuration-change-hook 'image-mode-reapply-winprops nil t)
-         (add-hook 'window-configuration-change-hook 'pdf-view-redisplay-some-windows nil t)
-         (add-hook 'image-mode-new-window-functions #'pdf-view-new-window-function nil t)
-
-         (remove-hook 'pre-redisplay-functions 'pdf-roll-pre-redisplay t)
-         (remove-hook 'pdf-roll-after-change-page-hook 'pdf-history-before-change-page-hook t)
-
-         (kill-local-variable 'pdf-roll--state)
-
-         (when (bound-and-true-p pixel-scroll-precision-mode)
-             (setq-local pixel-scroll-precision-mode nil)
-             (setq-local mwheel-coalesce-scroll-events t))
-
-         (let ((inhibit-read-only t))
-           (remove-overlays)
-           (pdf-roll--forget-displayed-pages)
-           (pdf-view-new-window-function (list (selected-window)))
-           (set-buffer-modified-p nil)))))
+(defun pdf-view-roll-minor-mode (&optional _arg)
+  "Obsolete: continuous scrolling is what `pdf-view-mode' does.
+This only warns, once per session.  For one page at a time, use
+`pdf-view-single-page-mode'.  _ARG is ignored."
+  (interactive)
+  (unless pdf-roll--obsolete-mode-warned
+    (setq pdf-roll--obsolete-mode-warned t)
+    (display-warning
+     'pdf-tools
+     "`pdf-view-roll-minor-mode' is obsolete and does nothing: `pdf-view-mode' scrolls continuously.  For one page at a time, use `pdf-view-single-page-mode'.")))
+(make-obsolete 'pdf-view-roll-minor-mode
+               "`pdf-view-mode' scrolls continuously; see `pdf-view-single-page-mode'."
+               "1.4.0")
 
 ;;; Single page
 
@@ -726,41 +698,34 @@ At its top turn the page if `pdf-view-turn-page-at-top-and-bottom'."
 
 ;;;###autoload
 (define-minor-mode pdf-view-single-page-mode
-  "Show one page at a time, as `pdf-view-mode' did before continuous scrolling.
+  "Show one page at a time, as `pdf-view-mode' did before it scrolled continuously.
 
 Each window shows its current page alone.  Scrolling stays within the
 page; scrolling past its bottom or top turns the page as
 `pdf-view-turn-page-at-top-and-bottom' says, and SPC and DEL always
-turn it.  Turns on `pdf-view-roll-minor-mode', which draws the page."
+turn it."
   :lighter " Page"
   :keymap (let ((map (make-sparse-keymap)))
-            (define-key map [remap pdf-view-scroll-up-or-next-page] #'pdf-view-single-page-scroll-up)
-            (define-key map [remap pdf-view-scroll-down-or-previous-page] #'pdf-view-single-page-scroll-down)
-            (define-key map [remap pdf-view-next-line-or-next-page] #'pdf-view-single-page-next-line)
-            (define-key map [remap pdf-view-previous-line-or-previous-page] #'pdf-view-single-page-previous-line)
             (define-key map [remap pdf-roll-scroll-screen-forward] #'pdf-view-single-page-scroll-up)
             (define-key map [remap pdf-roll-scroll-screen-backward] #'pdf-view-single-page-scroll-down)
+            (define-key map [remap pdf-roll-scroll-forward] #'pdf-view-single-page-next-line)
+            (define-key map [remap pdf-roll-scroll-backward] #'pdf-view-single-page-previous-line)
             map)
   (cond
    (pdf-view-single-page-mode
-    (unless pdf-view-roll-minor-mode
-      (pdf-view-roll-minor-mode 1))
     (setq-local mwheel-scroll-up-function #'pdf-view-single-page-scroll-up)
     (setq-local mwheel-scroll-down-function #'pdf-view-single-page-scroll-down))
    (t
     (pdf-view-single-page--show-all)
-    (when pdf-view-roll-minor-mode
-      (setq-local mwheel-scroll-up-function #'pdf-roll-scroll-forward)
-      (setq-local mwheel-scroll-down-function #'pdf-roll-scroll-backward))))
-  (when pdf-view-roll-minor-mode
-    (pdf-roll-redisplay t)))
+    (setq-local mwheel-scroll-up-function #'pdf-roll-scroll-forward)
+    (setq-local mwheel-scroll-down-function #'pdf-roll-scroll-backward)))
+  (pdf-roll-redisplay t))
 
 (defun pdf-roll--get-display-property ()
   "`:before-until' advice for `image-get-display-property'.
 `image-get-display-property' looks at the `point-min'. This function instead
-returns the display property for the current page if `pdf-view-roll-minor-mode'
-is non-nil."
-  (when pdf-view-roll-minor-mode
+returns the display property for the current page in a PDF buffer."
+  (when (derived-mode-p 'pdf-view-mode)
     (get-char-property (pdf-roll-page-to-pos (pdf-view-current-page))
                        'display
                        (if (eq (window-buffer) (current-buffer))

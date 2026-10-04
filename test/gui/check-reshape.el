@@ -37,7 +37,6 @@
   (let* ((file (gui-check-copy (gui-check-test-pdf) "reshape-me.pdf"))
          (window (progn (gui-check-open file) (selected-window)))
          (ok t))
-    (pdf-view-roll-minor-mode 1)
     (gui-check-settle)
     (pdf-roll-scroll-forward 900 window t)
     (gui-check-settle)
