@@ -458,3 +458,16 @@ An image of another size would move the window off the layout."
           (should-not (image-property image :map)))
         ;; It is still drawn anew.
         (should (equal '(2 2) (mapcar #'car requests)))))))
+
+(ert-deftest pdf-roll-isearch-wraps-backward-to-the-end-of-the-last-page ()
+  "Wrapping backward shows the end of the last page, placeholder or not."
+  (require 'pdf-isearch)
+  (pdf-roll-test-with-async-render
+    (cl-letf (((symbol-function 'pdf-view-displayed-page-size)
+               (lambda (&rest _) '(10 . 5000))))
+      (pdf-view-goto-page 2 window)
+      (let ((isearch-forward nil))
+        (pdf-isearch-wrap-function))
+      (should (equal 6 (pdf-view-current-page window)))
+      (should (equal (- 5000 (window-text-height window t))
+                     (image-mode-window-get 'vscroll window))))))

@@ -104,6 +104,7 @@ searching across multiple lines.")
 
 (declare-function pdf-occur "pdf-occur.el")
 (declare-function pdf-sync-backward-search "pdf-sync.el")
+(declare-function pdf-roll-set-vscroll "pdf-roll.el")
 
 (defvar pdf-isearch-minor-mode-map
   (let ((kmap (make-sparse-keymap)))
@@ -333,17 +334,26 @@ This is a Isearch interface function."
 (defun pdf-isearch-wrap-function ()
   "Go to first or last page.
 
-This is a Isearch interface function."
+This is a Isearch interface function.  Searching backward, show the end
+of the last page.  In roll mode that page may still show a placeholder,
+which `image-scroll-up' cannot measure, so the vscroll is computed from
+the size of the page instead."
   (let ((page (if isearch-forward
                   1
                 (pdf-cache-number-of-pages))))
     (unless (or pdf-isearch-narrow-to-page
                 (= page (pdf-view-current-page)))
       (pdf-view-goto-page page)
-      (let ((next-screen-context-lines 0))
-        (if (= page 1)
-            (image-scroll-down)
-          (image-scroll-up)))))
+      (if pdf-view-roll-minor-mode
+          (unless (= page 1)
+            (pdf-roll-set-vscroll
+             (max 0 (- (cdr (pdf-view-displayed-page-size page))
+                       (window-text-height nil t)))
+             (selected-window)))
+        (let ((next-screen-context-lines 0))
+          (if (= page 1)
+              (image-scroll-down)
+            (image-scroll-up))))))
   (setq pdf-isearch-current-match nil))
 
 (defun pdf-isearch-mode-cleanup ()
