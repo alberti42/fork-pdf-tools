@@ -276,6 +276,7 @@ PDFView Mode is an Emacs PDF viewer. It displays PDF files as PNG images in Emac
 | Scroll Right / Left                           | ~C-f~ / ~C-b~           |
 | First Page / Last Page                        | ~<~, ~M-<~ / ~>~, ~M->~ |
 | Next Page / Previous Page                     | ~n~ / ~p~               |
+| Scroll Down / Up by 5 Lines                   | ~next~ / ~prior~        |
 | Incremental Search Forward / Backward         | ~C-s~ / ~C-r~           |
 | Occur (list all lines containing a phrase)    | ~M-s o~                 |
 | Jump to Occur Line                            | ~RETURN~                |
