@@ -105,5 +105,4 @@ Inside =pdf-roll.el=, =pdf-roll--get-display-property= (=pdf-roll.el:607=) advis
 * Next steps
 
 2. (Done, see the commit that adds this line.)  Build =pdf-view-single-page-mode= on top of today's =pdf-view-roll-minor-mode=: only the current page shows, the margins are hidden, the vscroll is clamped to the page, and scrolling past the bottom or the top turns the page as the tables above say.  A graphical check compares it with plain mode key by key.
-3. Make =pdf-view-mode= always draw with the machinery of =pdf-roll.el=; =pdf-view-roll-minor-mode= becomes obsolete, and the plain-mode path stays behind a variable for a while.
-4. Delete the plain-mode path and the 26 branches with it.
+3. (Done.)  =pdf-view-mode= draws with the machinery of =pdf-roll.el= and the plain-mode path is deleted with the 26 branches, in one step rather than two (decided 2026-10-04: no fallback option; the branch itself is the fallback while it is tested).  =pdf-view-roll-minor-mode= is an obsolete command that warns once per session and does nothing; the plain scrolling commands are obsolete aliases of the pdf-roll ones.  Plain mode's behaviour is kept as a recording, =test/gui/fixtures/plain-mode.eld=, which =check-single-page= and =check-isearch-wrap= compare with.

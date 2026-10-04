@@ -1,28 +1,32 @@
 -*- org -*-
 * Version 1.4.0 (unreleased)
+** Continuous scrolling is how pdf-view-mode shows a document
+- ~pdf-view-mode~ scrolls continuously, as ~pdf-view-roll-minor-mode~ did in 1.3.0: pages follow each other in the window.
+- New minor mode ~pdf-view-single-page-mode~ shows one page at a time, as ~pdf-view-mode~ did before.
+  + ~SPC~ and ~DEL~ scroll a screen and turn the page at its bottom and top; ~C-n~, ~C-p~ and the mouse wheel scroll by lines and turn the page there if ~pdf-view-turn-page-at-top-and-bottom~ is non-nil.
+  + To have it for all PDFs: ~(add-hook 'pdf-view-mode-hook #'pdf-view-single-page-mode)~.
+- ~pdf-view-roll-minor-mode~ is obsolete: it warns once per session and does nothing.  Remove it from your configuration.
+- The code that drew one page per window through image-mode is removed.
+
 ** Rendering without waiting
-- Pages are rendered without waiting for the server in ~pdf-view-roll-minor-mode~
+- Pages are rendered without waiting for the server
   + A page not rendered yet shows a blank placeholder of its size, and the page replaces it when the server has rendered it.  Redisplay no longer waits for epdfinfo, so code run during redisplay -- the mode line, timers, other processes' sentinels such as AUCTeX's -- no longer runs in the middle of a render.
   + On by default; set ~pdf-view-render-asynchronously~ to nil to wait for each page as before.
-- Reverting a document in roll mode keeps the pages on screen until their new renders arrive
+- Reverting a document keeps the pages on screen until their new renders arrive
   + After a compilation the window no longer goes blank.  A page whose size changed shows its old image reshaped to the new size until then.
   + Links, annotations and text selection do nothing on a page still showing the old document.
 - The size of every page is read when the document is opened and reverted, so a page takes its room in the window before it is drawn.
 
-** One page at a time on top of continuous scrolling
-- New minor mode ~pdf-view-single-page-mode~
-  + Each window shows its current page alone, as ~pdf-view-mode~ does without ~pdf-view-roll-minor-mode~, while pages are drawn by roll mode: without waiting, and kept on screen through a revert.
-  + ~SPC~ and ~DEL~ scroll a screen and turn the page at its bottom and top; ~C-n~, ~C-p~ and the mouse wheel scroll by lines and turn the page there if ~pdf-view-turn-page-at-top-and-bottom~ is non-nil.
-
 ** Functionality improvements and fixes
-- ~SPC~, ~S-SPC~ and ~DEL~ scroll a screen in roll mode, as they do outside it; they scrolled one line.
-- Isearch no longer signals "Invalid image specification" when it wraps backward in roll mode.
+- ~SPC~, ~S-SPC~ and ~DEL~ scroll a screen in the continuous view; in 1.3.0 roll mode they scrolled one line.
+- Isearch no longer signals "Invalid image specification" when it wraps backward.
 - A page whose width is capped by ~pdf-view-max-image-width~ keeps its proportions.
 - A page is shown at the same height whichever cached image it is drawn from.
 
-** Changes to options
+** Changes to options and commands
 - ~pdf-view-continuous~ is renamed ~pdf-view-turn-page-at-top-and-bottom~, which says what it does: scrolling past the bottom or the top of a page turns the page.  The old name is an obsolete alias.
 - New option ~pdf-view-render-asynchronously~, see above.
+- ~pdf-view-scroll-up-or-next-page~, ~pdf-view-scroll-down-or-previous-page~, ~pdf-view-next-line-or-next-page~ and ~pdf-view-previous-line-or-previous-page~ are obsolete aliases of ~pdf-roll-scroll-screen-forward~, ~pdf-roll-scroll-screen-backward~, ~pdf-roll-scroll-forward~ and ~pdf-roll-scroll-backward~.
 
 ** Requirements
 - Emacs 27.1 or later is required; 26.3 was released in August 2019.
