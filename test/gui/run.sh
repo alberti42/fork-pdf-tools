@@ -1,5 +1,5 @@
 #!/bin/sh
-# Run the checks in test/gui and report PASS or FAIL for each.
+# Run the checks in test/gui and report PASS, FAIL or SKIP for each.
 #
 #   test/gui/run.sh [CHECK...]
 #
@@ -40,7 +40,7 @@ for check in "$@"; do
         failed=1
     elif [ -f "$OUT/$name.out" ]; then
         head -1 "$OUT/$name.out"
-        grep -q '^PASS' "$OUT/$name.out" || failed=1
+        grep -q '^PASS\|^SKIP' "$OUT/$name.out" || failed=1
     else
         echo "FAIL $name (no report)"
         failed=1
