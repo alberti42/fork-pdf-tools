@@ -1237,6 +1237,7 @@ See also `pdf-view-use-imagemagick'."
                     window page size)))
     (pdf-view-create-image data
       :width (car size)
+      :height (cdr size)
       :rotation (or pdf-view--current-rotation 0)
       :map hotspots
       :pointer 'arrow)))
@@ -1473,12 +1474,18 @@ If WINDOW is t, redisplay pages in all windows."
          (setq scale height-scale))
         (t
          (setq scale width-scale))))
-    (let ((width (floor (* (car pagesize) scale)))
-          (height (floor (* (cdr pagesize) scale))))
-      (when (> width (max 1 (or pdf-view-max-image-width width)))
-        (setq height (floor (* height (/ (float pdf-view-max-image-width) width)))
-              width pdf-view-max-image-width))
-      (cons (max 1 width) (max 1 height)))))
+    (let ((width (max 1 (min (floor (* (car pagesize) scale))
+                             (or pdf-view-max-image-width most-positive-fixnum)))))
+      ;; The height is computed from the width the way epdfinfo computes
+      ;; it, and `pdf-view-create-page' passes both to Emacs.  Emacs
+      ;; would otherwise compute the height of a cached image it scales
+      ;; from that image's own, already rounded, proportions, and the
+      ;; same page would come out one pixel taller or shorter depending
+      ;; on what the cache held.
+      (cons width
+            (max 1 (floor (+ (* (/ (float width) (car pagesize))
+                                (cdr pagesize))
+                             0.5)))))))
 
 (defun pdf-view-text-regions-hotspots-function (page size)
   "Return a list of hotspots for text regions on PAGE using SIZE.

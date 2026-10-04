@@ -357,3 +357,24 @@ processes' filters and sentinels in the middle of that redisplay."
           (should (equal '(1200 . 1600) (pdf-view-desired-image-size 1))))
         (let ((pdf-view-max-image-width 600))
           (should (equal '(600 . 800) (pdf-view-desired-image-size 1))))))))
+
+(ert-deftest pdf-view-create-page-gives-emacs-the-height ()
+  "The image gets the height epdfinfo renders, not one Emacs computes.
+
+At 900 pixels a 612x792 page is 1164.7 rows high, which epdfinfo rounds
+to 1165.  `create-image' and `pdf-view-image-type' are replaced because
+Emacs on CI lacks PNG support."
+  (pdf-test-with-test-pdf
+    (pdf-view-mode)
+    (let (props)
+      (cl-letf (((symbol-function 'pdf-cache-pagesize) (lambda (_) '(612 . 792)))
+                ((symbol-function 'pdf-cache-renderpage) (lambda (&rest _) "data"))
+                ((symbol-function 'pdf-view-image-type) (lambda () 'png))
+                ((symbol-function 'create-image)
+                 (lambda (_data _type _data-p &rest p) (setq props p))))
+        (let ((pdf-view-display-size 2.0)
+              (pdf-view-max-image-width 900))
+          (should (equal '(900 . 1165) (pdf-view-desired-image-size 1)))
+          (pdf-view-create-page 1)
+          (should (equal 900 (plist-get props :width)))
+          (should (equal 1165 (plist-get props :height))))))))
