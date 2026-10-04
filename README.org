@@ -112,7 +112,7 @@ Installing this package via NonGNU ELPA or MELPA or any of the other package man
 :END:
 If you install ~pdf-tools~ via NonGNU ELPA or MELPA, *you don't need to worry about this separate server installation at all*.
 
-Note: You'll need GNU Emacs \ge 26.3 and some form of a GNU/Linux OS. Other operating systems are not officially supported, but ~pdf-tools~ is known to work on many of them.
+Note: You'll need GNU Emacs \ge 27.1 and some form of a GNU/Linux OS. Other operating systems are not officially supported, but ~pdf-tools~ is known to work on many of them.
 
 The ~epdfinfo~ install script takes care of installing most of the necessary pre-requisites on supported operating systems (see list below). See the section on [[id:A34704B9-1B51-4614-8806-C4059F7B42D5][I want to add support for ~pdf-tools~ on =My Fav OS=. How do I do that?]] to learn how to add your favorite Operating System to this list.
 
@@ -643,7 +643,7 @@ to scale the images correctly when rendering them.
 :CREATED:  [2022-01-02 Sun 10:12]
 :ID:       f44c66e6-402d-4154-b806-6bb4180a0a5b
 :END:
-~pdf-tools~ supports the 3 latest versions of Emacs major releases. At the moment of this writing, this means that the minimum supported Emacs version is ~26.3~.
+The minimum supported Emacs version is ~27.1~.
 
 ** I want to add support for pdf-tools on "My Fav OS". How do I do that?
 :PROPERTIES:
