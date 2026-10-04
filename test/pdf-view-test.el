@@ -433,3 +433,18 @@ server."
       (should (equal (1+ generation) pdf-view--document-generation))
       (pdf-view-revert-buffer nil t)
       (should (equal (+ 2 generation) pdf-view--document-generation)))))
+
+(ert-deftest pdf-view-page-displayed-p-a-space-is-not-a-page ()
+  "In roll mode a page not drawn yet shows a `space', not an image."
+  (with-temp-buffer
+    (insert " ")
+    (let ((overlay (make-overlay 1 2))
+          (pdf-view-roll-minor-mode t))
+      (cl-letf (((symbol-function 'pdf-roll-page-overlay) (lambda (&rest _) overlay)))
+        (overlay-put overlay 'display '(space :width 25 :height 1000))
+        (should-not (pdf-view-page-displayed-p nil 1))
+        (overlay-put overlay 'display '(image :type png :width 10 :height 400))
+        (should (pdf-view-page-displayed-p nil 1))
+        ;; A sliced page.
+        (overlay-put overlay 'display '((slice 0 0 5 5) (image :type png :width 10 :height 400)))
+        (should (pdf-view-page-displayed-p nil 1))))))

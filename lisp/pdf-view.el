@@ -1276,10 +1276,11 @@ nothing, so it may be called while Emacs is displaying."
                (and overlay (overlay-get overlay 'display)))
            (image-get-display-property))))
     ;; A display property may name more than the image, and may also be the
-    ;; image specification itself, as it is outside roll mode.
-    (and (or (and (consp display-prop)
-                  (assoc 'image display-prop))
-             display-prop)
+    ;; image specification itself, as it is outside roll mode.  A `space' is
+    ;; what roll mode shows for a page it has not drawn.
+    (and (or (eq (car-safe display-prop) 'image)
+             (and (consp display-prop)
+                  (assoc 'image display-prop)))
          t)))
 
 (defun pdf-view-displayed-image (&optional window page)
@@ -1295,7 +1296,7 @@ the image itself, ready for `create-image' or `pdf-util-convert-image'."
   (let ((display-prop (if pdf-view-roll-minor-mode
                           (progn (setq window (if (windowp window) window (selected-window)))
                                  (setq page (or page (pdf-view-current-page window)))
-                                 (unless (memq page (image-mode-window-get 'displayed-pages window))
+                                 (unless (pdf-view-page-displayed-p window page)
                                    (pdf-view-display-page page window))
                                  (overlay-get (pdf-roll-page-overlay page window) 'display))
                         (image-get-display-property))))
