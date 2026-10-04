@@ -423,3 +423,13 @@ server."
       (pdf-view-revert-buffer nil t)
       (should-not (sizes-asked))
       (should (equal (pdf-info-pagesize 3) (pdf-cache-pagesize 3))))))
+
+(ert-deftest pdf-view-revert-moves-the-document-generation-on ()
+  "Each revert closes the document, and starts a new generation."
+  (pdf-test-with-test-pdf
+    (pdf-view-mode)
+    (let ((generation pdf-view--document-generation))
+      (pdf-view-revert-buffer nil t)
+      (should (equal (1+ generation) pdf-view--document-generation))
+      (pdf-view-revert-buffer nil t)
+      (should (equal (+ 2 generation) pdf-view--document-generation)))))

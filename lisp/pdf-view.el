@@ -273,6 +273,19 @@ See `pdf-view-read-mode-line-data'.")
 
 See `pdf-view-read-mode-line-data'.")
 
+(defvar-local pdf-view--document-generation 0
+  "How many times the document of the buffer has been closed.
+
+A revert closes the document and opens the file again, which may have
+changed.  A request to the server, or an image drawn, records the
+generation it was made in, and is out of date when the generation has
+moved on since.  See `pdf-view--next-document-generation'.")
+
+(defun pdf-view--next-document-generation ()
+  "Count one more closing of the document of the buffer.
+It is on `pdf-info-close-document-hook'."
+  (setq pdf-view--document-generation (1+ pdf-view--document-generation)))
+
 (defvar-local pdf-view-active-region nil
   "The active region as a cons cell of page and list of edges.
 
@@ -508,6 +521,8 @@ PNG images in Emacs buffers."
   (add-hook 'write-contents-functions
             'pdf-view--write-contents-function nil t)
   (add-hook 'kill-buffer-hook 'pdf-view-close-document nil t)
+  (add-hook 'pdf-info-close-document-hook
+            #'pdf-view--next-document-generation nil t)
   (pdf-view-add-hotspot-function
    'pdf-view-text-regions-hotspots-function -9)
 
