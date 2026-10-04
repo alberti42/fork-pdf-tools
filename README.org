@@ -44,7 +44,7 @@ From the table of contents on, this file is the upstream README.
 - [[#features][Features]]
   - [[#view-and-navigate-pdfs][View and Navigate PDFs]]
     - [[#keybindings-for-navigating-pdf-documents][Keybindings for navigating PDF documents]]
-    - [[#continuous-scroll-mode-experimental][Continuous Scroll Mode (Experimental)]]
+    - [[#continuous-scrolling-and-single-pages][Continuous Scrolling and Single Pages]]
     - [[#keybindings-for-manipulating-display-of-pdf][Keybindings for manipulating display of PDF]]
   - [[#annotations][Annotations]]
     - [[#keybindings-for-working-with-annotations][Keybindings for working with Annotations]]
@@ -290,42 +290,36 @@ PDFView Mode is an Emacs PDF viewer. It displays PDF files as PNG images in Emac
 |                                               |                         |
 Note that ~pdf-tools~ renders the PDF as images inside Emacs. This means that all the keybindings of ~image-mode~ work on individual PDF pages as well.
 
-*** Continuous Scroll Mode (Experimental)
+*** Continuous Scrolling and Single Pages
 :PROPERTIES:
 :CREATED:  [2024-12-31 Tue 14:00]
 :ID:       82201772-0166-4335-B4DF-841D03AE1DCD
 :END:
-~pdf-tools~ supports an optional continuous scroll mode that displays multiple pages simultaneously and allows smooth scrolling across page boundaries. This feature is experimental and off by default.
+~pdf-view-mode~ scrolls continuously: pages follow each other in the window, and a tall window shows several of them.  Pages are rendered without waiting, so a page not rendered yet shows a blank placeholder of its size for a moment.
+- ~SPC~ / ~DEL~ scroll a screen, ~C-n~ / ~C-p~ a line, across pages
+- The mouse wheel and ~pixel-scroll-precision-mode~ scroll across pages
+- Reverting the document, as AUCTeX does after a compilation, keeps the pages on screen until they are rendered anew
 
-To enable continuous scroll mode:
+To see one page at a time, as ~pdf-view-mode~ did before version 1.4.0:
 #+begin_src elisp
-  M-x pdf-view-roll-minor-mode RET
+  M-x pdf-view-single-page-mode RET
 #+end_src
-
-When enabled, you will see "Continuous" in the mode-line. In this mode:
-- Multiple pages are visible at once in tall windows
-- Scrolling is smooth and continuous across page boundaries
-- ~C-n~ / ~C-p~ scroll by pixels instead of jumping pages
-- Mouse wheel scrolling works smoothly across pages
-- Works with ~pixel-scroll-precision-mode~ for trackpad scrolling
-
-To enable by default for all PDFs, add to your configuration:
+or, for all PDFs:
 #+begin_src elisp
-  (add-hook 'pdf-view-mode-hook #'pdf-view-roll-minor-mode)
+  (add-hook 'pdf-view-mode-hook #'pdf-view-single-page-mode)
 #+end_src
+In that mode ~SPC~ and ~DEL~ scroll a screen within the page and turn it at its bottom and top, and ~C-n~, ~C-p~ and the mouse wheel scroll by lines and turn the page there if ~pdf-view-turn-page-at-top-and-bottom~ is non-nil (the default).
 
 You can customize the appearance with:
 - ~pdf-roll-vertical-margin~: Pixel height of margin between pages (default: 2)
 - ~pdf-roll-margin-color~: Color of the margin between pages (default: "gray")
 
-*Note*: This feature is experimental. Some features may not work perfectly with continuous scroll mode enabled. If you encounter issues, disable the mode with ~M-x pdf-view-roll-minor-mode~.
+~pdf-view-roll-minor-mode~, which turned continuous scrolling on before version 1.4.0, is obsolete: it only warns.  Remove it from your configuration.
 
 | Image Mode             |                                             |
 |------------------------+---------------------------------------------|
 | image-scroll-right     | ~C-x >~ / ~<remap> <scroll-right>~          |
 | image-scroll-left      | ~C-x <~ / ~<remap> <scroll-left>~           |
-| image-scroll-up        | ~C-v~ / ~<remap> <scroll-up>~               |
-| image-scroll-down      | ~M-v~ / ~<remap> <scroll-down>~             |
 | image-forward-hscroll  | ~C-f~ / ~right~ / ~<remap> <forward-char>~  |
 | image-backward-hscroll | ~C-b~ / ~left~  / ~<remap> <backward-char>~ |
 | image-bob              | ~<remap> <beginning-of-buffer>~             |
