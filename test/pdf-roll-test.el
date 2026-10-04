@@ -331,7 +331,7 @@ batch."
   "Run BODY in test.pdf with pages rendered asynchronously.
 `requests' is the list of (PAGE . CALLBACK) sent to the server, newest
 first, and `drawn' the pages drawn.  The server answers when BODY calls
-a CALLBACK.  Timers run at once."
+a CALLBACK.  Timers run at once.  Images and pages measure 10x20."
   (declare (indent 0) (debug t))
   `(pdf-test-with-test-pdf
      (let ((window (selected-window))
@@ -345,6 +345,8 @@ a CALLBACK.  Timers run at once."
                  ((symbol-function 'image-display-size)
                   (lambda (&rest _) '(10 . 20)))
                  ((symbol-function 'image-size)
+                  (lambda (&rest _) '(10 . 20)))
+                 ((symbol-function 'pdf-view-displayed-page-size)
                   (lambda (&rest _) '(10 . 20)))
                  ((symbol-function 'run-at-time)
                   (lambda (_time _repeat fn &rest args) (apply fn args))))
@@ -393,3 +395,51 @@ a CALLBACK.  Timers run at once."
     (should (equal '(4 2) (mapcar #'car requests)))
     (funcall (cdar requests) nil "png data")
     (should (equal '(4 2) drawn))))
+
+(ert-deftest pdf-roll-revert-keeps-the-pages-until-drawn-anew ()
+  "A revert leaves the buffer text, the overlays and the images alone.
+The pages are stale until their new renders arrive."
+  (pdf-roll-test-with-async-render
+    (pdf-roll-display-page 2 window)
+    (funcall (cdar requests) nil "png data")
+    (let ((text (buffer-string))
+          (overlay (pdf-roll-page-overlay 2 window))
+          (image (overlay-get (pdf-roll-page-overlay 2 window) 'display)))
+      (pdf-view-revert-buffer nil t)
+      (should (equal text (buffer-string)))
+      (should (eq overlay (pdf-roll-page-overlay 2 window)))
+      (should (eq image (overlay-get overlay 'display)))
+      (should (pdf-view-page-stale-p window 2))
+      ;; The redisplay after the revert asks for the page again and keeps
+      ;; showing the old one meanwhile.
+      (setq requests nil drawn nil)
+      (pdf-roll-display-page 2 window t)
+      (should (eq image (overlay-get overlay 'display)))
+      (should (equal '(2) (mapcar #'car requests)))
+      (funcall (cdar requests) nil "png data")
+      (should (equal '(2) drawn))
+      (should-not (pdf-view-page-stale-p window 2)))))
+
+(ert-deftest pdf-roll-revert-rebuilds-the-overlays-if-the-pages-changed ()
+  "A revert to a document with another number of pages starts afresh."
+  (pdf-roll-test-with-async-render
+    (let ((overlay (pdf-roll-page-overlay 1 window)))
+      (cl-letf (((symbol-function 'pdf-cache-number-of-pages) (lambda () 7))
+                ((symbol-function 'pdf-cache-read-pagesizes) #'ignore))
+        (pdf-view-revert-buffer nil t)
+        (should (equal (1- (* 4 7)) (buffer-size)))
+        (should-not (eq overlay (pdf-roll-page-overlay 1 window)))))))
+
+(ert-deftest pdf-roll-async-render-replaces-an-image-of-another-size ()
+  "A page whose image no longer has its size shows a placeholder meanwhile.
+An image of another size would move the window off the layout."
+  (pdf-roll-test-with-async-render
+    (pdf-roll-display-page 2 window)
+    (funcall (cdar requests) nil "png data")
+    ;; Otherwise the page is drawn again at once, from the cache.
+    (pdf-cache-clear-images)
+    (cl-letf (((symbol-function 'pdf-view-displayed-page-size)
+               (lambda (&rest _) '(20 . 10))))
+      (pdf-roll-display-page 2 window t)
+      (should (equal '(space :width (20) :height (10))
+                     (overlay-get (pdf-roll-page-overlay 2 window) 'display))))))

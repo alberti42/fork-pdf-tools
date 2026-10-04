@@ -45,6 +45,7 @@
 (declare-function pdf-roll-page-overlay "pdf-roll")
 (declare-function pdf-roll-page-at-current-pos "pdf-roll")
 (declare-function pdf-roll-display-image "pdf-roll")
+(declare-function pdf-roll-revert-buffer "pdf-roll")
 
 (defvar pdf-view-roll-minor-mode nil)
 
@@ -725,8 +726,16 @@ has put the document in the buffer for Emacs to write."
   "Revert buffer while preserving current modes.
 
 Optional parameters IGNORE-AUTO and NOCONFIRM are defined as in
-`revert-buffer'."
+`revert-buffer'.  With `pdf-view-roll-minor-mode' this is
+`pdf-roll-revert-buffer'."
   (interactive (list (not current-prefix-arg)))
+  (if pdf-view-roll-minor-mode
+      (pdf-roll-revert-buffer ignore-auto noconfirm)
+    (pdf-view--revert-buffer ignore-auto noconfirm)))
+
+(defun pdf-view--revert-buffer (ignore-auto noconfirm)
+  "Revert buffer as `pdf-view-revert-buffer' does outside roll mode.
+IGNORE-AUTO and NOCONFIRM are as in `revert-buffer'."
   ;; Bind to default so that we can use pdf-view-revert-buffer as
   ;; revert-buffer-function.  A binding of nil is needed in Emacs 24.3, but in
   ;; later versions the semantics that nil means the default function should
@@ -1367,13 +1376,22 @@ not be asked anything synchronously, so drawing is left to a timer."
                            (with-current-buffer buffer
                              (pdf-view--render-finish request)))))))
 
+(defun pdf-view--page-up-to-date-p (window page width)
+  "Return non-nil if WINDOW shows PAGE drawn WIDTH pixels wide, as it is now.
+A page that shows a placeholder, an image of a document since closed, or
+an image of another width is not."
+  (and (pdf-view-page-displayed-p window page)
+       (not (pdf-view-page-stale-p window page))
+       (eq width (overlay-get (pdf-roll-page-overlay page window)
+                              'pdf-view-width))))
+
 (defun pdf-view--render-finish (request)
   "Draw the page of REQUEST, if its window still waits for it."
-  (pcase-let ((`(,page ,window ,_width ,_generation) request))
+  (pcase-let ((`(,page ,window ,width ,_generation) request))
     (when (and (pdf-view--render-request-current-p request)
                pdf-view-roll-minor-mode
                (pdf-roll-page-overlay page window)
-               (not (pdf-view-page-displayed-p window page)))
+               (not (pdf-view--page-up-to-date-p window page width)))
       (pdf-view-display-image (pdf-view-create-page page window) page window)
       (force-window-update window))))
 

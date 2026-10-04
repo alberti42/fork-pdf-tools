@@ -147,6 +147,8 @@ height."
     ;; it here rather than write to an overlay that is no longer there.
     (when overlay
       (overlay-put overlay 'pdf-view-generation pdf-view--document-generation)
+      (overlay-put overlay 'pdf-view-width
+                   (car (pdf-view-desired-image-size page window)))
       (overlay-put overlay 'display display)
       (overlay-put overlay 'line-prefix offset))
     (when margin-overlay
@@ -168,8 +170,18 @@ on the image, so it does not depend on the image being there."
          (display (and overlay (overlay-get overlay 'display))))
     (when (or force (not display) (eq (car display) 'space))
       (if pdf-view-render-asynchronously
-          (progn (pdf-roll-display-placeholder page window)
-                 (pdf-view-request-page page window))
+          (progn
+            ;; A page that shows an image of the size it is to have keeps
+            ;; it until the new one comes, after a revert for instance.
+            ;; FORCE says that image is out of date, whatever it was drawn
+            ;; for.  An image of another size would put the window
+            ;; somewhere the layout does not expect, so it is replaced.
+            (if (and (pdf-view-page-displayed-p window page)
+                     (equal (image-display-size display t)
+                            (pdf-view-displayed-page-size page window)))
+                (when force (overlay-put overlay 'pdf-view-width nil))
+              (pdf-roll-display-placeholder page window))
+            (pdf-view-request-page page window))
         (pdf-roll-display-image (pdf-view-create-page page window) page window)))
     (cdr (pdf-view-displayed-page-size page window))))
 
@@ -442,7 +454,7 @@ the buffer may no longer hold an overlay for."
 
 (defun pdf-roll-initialize (&rest _args)
   "Fun to initialize `pdf-view-roll-minor-mode'.
-It is also added to `revert-buffer-function'."
+`pdf-roll-revert-buffer' calls it too, when the number of pages changed."
   (if pdf-roll--delay-revert
       ;; The timer has to be given the buffer: it runs with whatever buffer
       ;; happens to be current when it fires, and the work below erases the
@@ -458,6 +470,52 @@ It is also added to `revert-buffer-function'."
       (remove-overlays))
     (pdf-roll--forget-displayed-pages)
     (pdf-roll-new-window-function)))
+
+(defun pdf-roll-revert-buffer (&optional _ignore-auto noconfirm)
+  "Revert the buffer from its file, leaving the buffer text alone.
+
+NOCONFIRM is as in `revert-buffer'.  The buffer text is a space for
+each page and its margin, holding their overlays; inserting the file
+there, as `revert-buffer--default' does, would collapse the overlays and
+the pages on them.  Instead the document is closed and opened again, and
+if it has as many pages as before, every page keeps showing what it
+showed until it is drawn anew (see `pdf-view-request-page').  Clicks on
+it do nothing until then (see `pdf-view-page-stale-p').  If the number
+of pages changed, the overlays are made anew with
+`pdf-roll-initialize'.
+
+`revert-buffer' leaves `before-revert-hook' and `after-revert-hook' to
+the revert function, so they are run here."
+  (let ((file-name (buffer-file-name)))
+    (when (or noconfirm
+              (and (not (buffer-modified-p))
+                   (cl-some (lambda (regexp) (string-match-p regexp file-name))
+                            revert-without-query))
+              (yes-or-no-p (format "Revert buffer from file %s? " file-name)))
+      (run-hooks 'before-revert-hook)
+      ;; The server reads a copy of the file, made when the buffer visits it,
+      ;; if it cannot read the file itself: a remote, compressed or encrypted
+      ;; file.
+      (when pdf-view--buffer-file-name
+        (let ((copy pdf-view--buffer-file-name))
+          (with-temp-buffer
+            (set-buffer-multibyte nil)
+            (let ((coding-system-for-read 'binary))
+              (insert-file-contents file-name))
+            (write-region nil nil copy nil 'no-message))))
+      (pdf-info-close)
+      (pdf-view-decrypt-document)
+      (pdf-view-read-mode-line-data)
+      (pdf-cache-read-pagesizes)
+      (set-visited-file-modtime)
+      (set-buffer-modified-p nil)
+      ;; Two characters, each with an overlay, for every page and its
+      ;; margin, and a newline after each but the last.
+      (if (eq (pdf-cache-number-of-pages) (/ (1+ (buffer-size)) 4))
+          (pdf-roll-redisplay t)
+        (pdf-roll-initialize))
+      (run-hooks 'after-revert-hook)
+      t)))
 
 ;;;###autoload
 (define-minor-mode pdf-view-roll-minor-mode
@@ -486,8 +544,6 @@ It is also added to `revert-buffer-function'."
          (add-hook 'pre-redisplay-functions 'pdf-roll-pre-redisplay nil t)
          (add-hook 'pdf-roll-after-change-page-hook 'pdf-history-before-change-page-hook nil t)
 
-         (add-function :after (local 'revert-buffer-function) #'pdf-roll-initialize)
-
          (make-local-variable 'pdf-roll--state)
 
          (when (local-variable-p 'pixel-scroll-precision-mode)
@@ -502,8 +558,6 @@ It is also added to `revert-buffer-function'."
          (add-hook 'window-configuration-change-hook 'image-mode-reapply-winprops nil t)
          (add-hook 'window-configuration-change-hook 'pdf-view-redisplay-some-windows nil t)
          (add-hook 'image-mode-new-window-functions #'pdf-view-new-window-function nil t)
-
-         (remove-function (local 'revert-buffer-function) #'pdf-roll-initialize)
 
          (remove-hook 'pre-redisplay-functions 'pdf-roll-pre-redisplay t)
          (remove-hook 'pdf-roll-after-change-page-hook 'pdf-history-before-change-page-hook t)
