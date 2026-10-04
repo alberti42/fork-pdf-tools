@@ -55,10 +55,11 @@
   (push (apply #'format format-string args) gui-check-lines))
 
 (defun gui-check-finish (name ok)
-  "Write the report of the check NAME and exit, with status 0 if OK."
+  "Write the report of the check NAME and exit, with status 0 if OK.
+OK may also be the symbol `skip', for a check that could not compare."
   (let ((file (expand-file-name (concat name ".out") gui-check-out-dir)))
     (with-temp-file file
-      (insert (if ok "PASS" "FAIL") " " name "\n"
+      (insert (cond ((eq ok 'skip) "SKIP") (ok "PASS") (t "FAIL")) " " name "\n"
               (mapconcat #'identity (reverse gui-check-lines) "\n") "\n"
               "=== Messages\n"
               (with-current-buffer (messages-buffer) (buffer-string))))
@@ -66,7 +67,8 @@
 
 (defmacro gui-check (name &rest body)
   "Run BODY as the check NAME and exit.
-BODY returns non-nil if the check passed.  An error fails it."
+BODY returns non-nil if the check passed, or `skip' if it could not
+compare.  An error fails it."
   (declare (indent 1))
   `(let ((ok (condition-case err
                  (progn ,@body)
@@ -110,6 +112,15 @@ For checks that change the file they view."
 (defun gui-check-open (file)
   "Visit FILE in the selected window and return its buffer."
   (switch-to-buffer (find-file-noselect file)))
+
+(defun gui-check-plain-mode-reference ()
+  "Return what plain `pdf-view-mode' did, as recorded before its removal.
+A plist with :window-text-height, :keys and :isearch-wraps; see
+test/gui/fixtures/plain-mode.eld."
+  (with-temp-buffer
+    (insert-file-contents
+     (expand-file-name "test/gui/fixtures/plain-mode.eld" gui-check-root))
+    (read (current-buffer))))
 
 (defun gui-check-test-pdf ()
   "Return the test document of the ert tests."

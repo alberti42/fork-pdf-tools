@@ -13,10 +13,10 @@
 
 (load (expand-file-name "gui-helper" (file-name-directory load-file-name)) nil t)
 
-(defun check-wrap (roll forward from)
-  "Wrap isearch FORWARD from page FROM, in roll mode if ROLL.
+(defun check-wrap (single forward from)
+  "Wrap isearch FORWARD from page FROM, in the single-page view if SINGLE.
 Return (PAGE VSCROLL), or the error."
-  (pdf-view-roll-minor-mode (if roll 1 -1))
+  (pdf-view-single-page-mode (if single 1 -1))
   (gui-check-settle)
   (pdf-view-goto-page from)
   (gui-check-settle)
@@ -29,14 +29,25 @@ Return (PAGE VSCROLL), or the error."
 
 (gui-check "check-isearch-wrap"
   (gui-check-open (gui-check-test-pdf))
-  (let ((ok t))
-    (dolist (case '((t 4) (nil 2)))
-      (let ((plain (check-wrap nil (car case) (cadr case)))
-            (roll (check-wrap t (car case) (cadr case))))
-        (gui-check-log "wrapping %s from page %d: plain %S, roll %S"
-                       (if (car case) "forward" "backward") (cadr case) plain roll)
-        (unless (and (integerp (car-safe plain)) (equal plain roll))
-          (setq ok nil))))
-    ok))
+  (gui-check-settle)
+  (let ((reference (gui-check-plain-mode-reference))
+        (height (window-text-height nil t))
+        (ok t))
+    (if (/= height (plist-get reference :window-text-height))
+        (progn
+          (gui-check-log "the window is %d pixels high, the reference was recorded at %d"
+                         height (plist-get reference :window-text-height))
+          'skip)
+      (dolist (case (plist-get reference :isearch-wraps))
+        (let* ((forward (car (car case)))
+               (from (cadr (car case)))
+               (plain (cdr case))
+               (continuous (check-wrap nil forward from))
+               (single (check-wrap t forward from)))
+          (gui-check-log "wrapping %s from page %d: plain mode %S, continuous %S, single page %S"
+                         (if forward "forward" "backward") from plain continuous single)
+          (unless (and (equal plain continuous) (equal plain single))
+            (setq ok nil))))
+      ok)))
 
 ;;; check-isearch-wrap.el ends here

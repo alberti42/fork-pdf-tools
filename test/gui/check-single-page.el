@@ -2,28 +2,29 @@
 
 ;;; Commentary:
 
-;; Presses the same keys in plain `pdf-view-mode' and in
-;; `pdf-view-single-page-mode' on test.pdf -- SPC, DEL, C-n, C-p, the
-;; mouse wheel, n, p, M->, M-<, at fit-width and at fit-page, and line
-;; scrolling with `pdf-view-turn-page-at-top-and-bottom' nil -- looking
-;; each key up through the keymaps, and records the page and the vscroll
-;; after each.  Passes if every step is the same in both, except C-n and
-;; C-p at fit-page: there plain mode scrolls the page, which already
-;; fits, up into blank space, and the single-page view instead turns the
-;; page, since no line is left to scroll.  Needs a graphical frame.
+;; Presses keys in `pdf-view-single-page-mode' on test.pdf -- SPC,
+;; DEL, C-n, C-p, the mouse wheel, n, p, M->, M-<, at fit-width and at
+;; fit-page, and line scrolling with
+;; `pdf-view-turn-page-at-top-and-bottom' nil -- looking each key up
+;; through the keymaps, and records the page and the vscroll after each.
+;; Passes if every step gives what plain `pdf-view-mode' gave, as
+;; recorded in fixtures/plain-mode.eld before plain mode was removed,
+;; except C-n and C-p at fit-page: there plain mode scrolled the page,
+;; which already fits, up into blank space, and the single-page view
+;; instead turns the page, since no line is left to scroll.  Skips if
+;; the window is not as high as when the reference was recorded.  Needs
+;; a graphical frame.
 
 ;;; Code:
 
 (load (expand-file-name "gui-helper" (file-name-directory load-file-name)) nil t)
 
-(defun check-keys (single)
-  "Return the trace of the keys, in the single-page view if SINGLE."
+(defun check-keys ()
+  "Return the trace of the keys in the single-page view."
   (let ((buffer (gui-check-open (gui-check-test-pdf)))
         (step 0)
         trace)
-    (if single
-        (pdf-view-single-page-mode 1)
-      (pdf-view-roll-minor-mode -1))
+    (pdf-view-single-page-mode 1)
     (gui-check-settle)
     (cl-flet ((press (what thunk)
                 (condition-case err
@@ -64,26 +65,34 @@
     (nreverse trace)))
 
 (gui-check "check-single-page"
-  (let ((plain (check-keys nil))
-        (single (check-keys t))
-        (ok t)
-        previous)
-    (cl-mapc
-     (lambda (p s)
-       (if (string-suffix-p "at fit-page" (nth 1 s))
-           ;; No line is left to scroll, so the page turns, from its top
-           ;; going forward and from its bottom going back.
-           (unless (and (integerp (nth 2 s)) (integerp (nth 2 previous))
-                        (= (abs (- (nth 2 s) (nth 2 previous))) 1)
-                        (= (nth 3 s) 0))
+  (let* ((reference (gui-check-plain-mode-reference))
+         (single (check-keys))
+         (height (progn (gui-check-open (gui-check-test-pdf))
+                        (pdf-view-single-page-mode 1)
+                        (gui-check-settle)
+                        (window-text-height nil t)))
+         (ok t)
+         previous)
+    (if (/= height (plist-get reference :window-text-height))
+        (progn
+          (gui-check-log "the window is %d pixels high, the reference was recorded at %d"
+                         height (plist-get reference :window-text-height))
+          'skip)
+      (cl-mapc
+       (lambda (p s)
+         (if (string-suffix-p "at fit-page" (nth 1 s))
+             ;; No line is left to scroll, so the page turns.
+             (unless (and (integerp (nth 2 s)) (integerp (nth 2 previous))
+                          (= (abs (- (nth 2 s) (nth 2 previous))) 1)
+                          (= (nth 3 s) 0))
+               (setq ok nil)
+               (gui-check-log "the page did not turn: %S after %S" s previous))
+           (unless (equal p s)
              (setq ok nil)
-             (gui-check-log "single-page view did not turn the page: %S after %S" s previous))
-         (unless (equal p s)
-           (setq ok nil)
-           (gui-check-log "plain: %S\nsingle-page: %S" p s)))
-       (setq previous s))
-     plain single)
-    (gui-check-log "%d steps" (length single))
-    ok))
+             (gui-check-log "plain mode: %S\nsingle-page: %S" p s)))
+         (setq previous s))
+       (plist-get reference :keys) single)
+      (gui-check-log "%d steps" (length single))
+      ok)))
 
 ;;; check-single-page.el ends here
