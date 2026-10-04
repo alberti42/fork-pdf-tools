@@ -26,6 +26,7 @@
 ** Changes to options and commands
 - ~pdf-view-continuous~ is renamed ~pdf-view-turn-page-at-top-and-bottom~, which says what it does: scrolling past the bottom or the top of a page turns the page.  The old name is an obsolete alias.
 - New option ~pdf-view-render-asynchronously~, see above.
+- ~RET~ is no longer bound; it was ~image-next-line~, a line scroll that never turned the page.
 - ~pdf-view-scroll-up-or-next-page~, ~pdf-view-scroll-down-or-previous-page~, ~pdf-view-next-line-or-next-page~ and ~pdf-view-previous-line-or-previous-page~ are obsolete aliases of ~pdf-roll-scroll-screen-forward~, ~pdf-roll-scroll-screen-backward~, ~pdf-roll-scroll-forward~ and ~pdf-roll-scroll-backward~.
 
 ** Requirements

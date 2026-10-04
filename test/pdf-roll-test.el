@@ -81,7 +81,8 @@
     (should (eq 'pdf-roll-scroll-screen-forward (key-binding (kbd "SPC"))))
     (should (eq 'pdf-roll-scroll-screen-backward (key-binding (kbd "S-SPC"))))
     (should (eq 'pdf-roll-scroll-screen-backward (key-binding (kbd "DEL"))))
-    (should (eq 'pdf-roll-scroll-forward (key-binding (kbd "C-n"))))))
+    (should (eq 'pdf-roll-scroll-forward (key-binding (kbd "C-n"))))
+    (should (eq 'undefined (key-binding (kbd "RET"))))))
 
 (ert-deftest pdf-roll-obsolete-mode-only-warns ()
   "`pdf-view-roll-minor-mode' warns once per session and does nothing else."
