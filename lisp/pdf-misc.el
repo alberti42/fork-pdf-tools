@@ -66,14 +66,13 @@ Empty when the size of the page is not available."
   ;; This runs from a mode-line construct, while Emacs is displaying, so it
   ;; may neither signal, draw a page nor wait for the server.
   ;; `pdf-view-image-size' does all three.  It has nothing to measure
-  ;; whenever the page carries no image -- before it has been rendered, and,
-  ;; with `pdf-view-roll-minor-mode', while the overlays a `revert-buffer'
-  ;; collapsed are being rebuilt -- and in roll mode it reads the overlay
-  ;; holding the page, so it signals `(wrong-type-argument overlayp nil)'
-  ;; rather than returning nothing.  In roll mode it also draws the page when
-  ;; the window has not drawn it yet, and a draw waits in
-  ;; `accept-process-output', which runs other Lisp in the middle of this
-  ;; redisplay.  So measure only what the window already shows, which
+  ;; whenever the page carries no image -- before it has been rendered, and
+  ;; while the overlays a `revert-buffer' collapsed are being rebuilt -- and
+  ;; it reads the overlay holding the page, so it signals
+  ;; `(wrong-type-argument overlayp nil)' rather than returning nothing.  It
+  ;; also draws the page when the window has not drawn it yet, and a draw
+  ;; waits in `accept-process-output', which runs other Lisp in the middle
+  ;; of this redisplay.  So measure only what the window already shows, which
   ;; `pdf-view-page-displayed-p' answers without drawing or asking.
   (let ((height (and (pdf-view-page-displayed-p)
                      (cdr (pdf-view-image-size t))))

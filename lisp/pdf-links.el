@@ -238,9 +238,7 @@ See `pdf-links-action-perform' for the interface."
 
   (pdf-util-assert-pdf-window)
   (let* ((win (selected-window))
-         (pages (if pdf-view-roll-minor-mode
-                    (reverse (image-mode-window-get 'displayed-pages win))
-                  (list (pdf-view-current-page))))
+         (pages (reverse (image-mode-window-get 'displayed-pages win)))
          (links (mapcar #'pdf-cache-pagelinks pages))
          (keys (pdf-links-read-link-action--create-keys
                 (apply #'+ (mapcar #'length links))))

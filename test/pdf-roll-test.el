@@ -72,26 +72,30 @@
   "Test that pdf-roll-default face is defined."
   (should (facep 'pdf-roll-default)))
 
-;;; Minor mode keymap tests
-
-(ert-deftest pdf-roll-minor-mode-keymap-exists ()
-  "Test that pdf-view-roll-minor-mode-map is defined with remappings."
-  (should (keymapp pdf-view-roll-minor-mode-map))
-  ;; Check that scroll commands are remapped
-  (should (lookup-key pdf-view-roll-minor-mode-map
-                      [remap pdf-view-previous-line-or-previous-page]))
-  (should (lookup-key pdf-view-roll-minor-mode-map
-                      [remap pdf-view-next-line-or-next-page])))
+;;; Key bindings
 
 (ert-deftest pdf-roll-space-scrolls-a-screen ()
-  "SPC, S-SPC and DEL scroll a screen in roll mode, as they do outside it."
+  "SPC, S-SPC and DEL scroll a screen, C-n a line."
   (with-temp-buffer
     (use-local-map pdf-view-mode-map)
-    (let ((pdf-view-roll-minor-mode t))
-      (should (eq 'pdf-roll-scroll-screen-forward (key-binding (kbd "SPC"))))
-      (should (eq 'pdf-roll-scroll-screen-backward (key-binding (kbd "S-SPC"))))
-      (should (eq 'pdf-roll-scroll-screen-backward (key-binding (kbd "DEL"))))
-      (should (eq 'pdf-roll-scroll-forward (key-binding (kbd "C-n")))))))
+    (should (eq 'pdf-roll-scroll-screen-forward (key-binding (kbd "SPC"))))
+    (should (eq 'pdf-roll-scroll-screen-backward (key-binding (kbd "S-SPC"))))
+    (should (eq 'pdf-roll-scroll-screen-backward (key-binding (kbd "DEL"))))
+    (should (eq 'pdf-roll-scroll-forward (key-binding (kbd "C-n"))))))
+
+(ert-deftest pdf-roll-obsolete-mode-only-warns ()
+  "`pdf-view-roll-minor-mode' warns once per session and does nothing else."
+  (let ((pdf-roll--obsolete-mode-warned nil)
+        warnings)
+    (cl-letf (((symbol-function 'display-warning)
+               (lambda (&rest args) (push args warnings))))
+      (with-temp-buffer
+        (let ((text (buffer-string)))
+          (pdf-view-roll-minor-mode 1)
+          (pdf-view-roll-minor-mode -1)
+          (should (equal text (buffer-string)))))
+      (should (equal 1 (length warnings)))
+      (should (eq 'pdf-tools (car (car warnings)))))))
 
 ;;; Overlay lookup tests
 
@@ -370,7 +374,6 @@ a CALLBACK.  Timers run at once.  Images and pages measure 10x20."
          (set-window-buffer window (current-buffer))
          (pdf-view-mode)
          (pdf-roll-new-window-function window)
-         (setq-local pdf-view-roll-minor-mode t)
          (pdf-cache-clear-images)
          (setq drawn nil)
          ,@body))))

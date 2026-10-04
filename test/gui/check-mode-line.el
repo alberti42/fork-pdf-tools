@@ -27,7 +27,6 @@
 
 (gui-check "check-mode-line"
   (gui-check-open (gui-check-test-pdf))
-  (pdf-view-roll-minor-mode 1)
   (pdf-misc-size-indication-minor-mode 1)
   (gui-check-settle)
   (dolist (page '(4 2 6 1 5 3 6 2))

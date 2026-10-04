@@ -282,11 +282,6 @@ This is a Isearch interface function."
         (setq pdf-isearch-current-match next-match)
         (pdf-isearch-hl-matches  next-match matches nil pages)
         (pdf-isearch-focus-match next-match)
-        ;; Don't get off track.
-        (when (or (and (bobp) (not isearch-forward))
-                  (and (eobp) isearch-forward))
-          (unless pdf-view-roll-minor-mode
-            (goto-char (1+ (/ (buffer-size) 2)))))
         ;; Signal success to isearch.
         ;; Moving the point is for `pdf-roll'. It ensures that
         ;; `re-search-forward' takes us back to the starting point. Otherwise
@@ -326,8 +321,7 @@ This is a Isearch interface function."
            pdf-isearch-current-match
            pdf-isearch-current-matches
            nil (image-mode-window-get 'displayed-pages (selected-window)))
-        (when pdf-view-roll-minor-mode
-          (pdf-view-redisplay)))
+        (pdf-view-redisplay))
       (image-set-window-hscroll hscroll)
       (image-set-window-vscroll vscroll))))
 
@@ -344,16 +338,11 @@ the size of the page instead."
     (unless (or pdf-isearch-narrow-to-page
                 (= page (pdf-view-current-page)))
       (pdf-view-goto-page page)
-      (if pdf-view-roll-minor-mode
-          (unless (= page 1)
-            (pdf-roll-set-vscroll
-             (max 0 (- (cdr (pdf-view-displayed-page-size page))
-                       (window-text-height nil t)))
-             (selected-window)))
-        (let ((next-screen-context-lines 0))
-          (if (= page 1)
-              (image-scroll-down)
-            (image-scroll-up))))))
+      (unless (= page 1)
+        (pdf-roll-set-vscroll
+         (max 0 (- (cdr (pdf-view-displayed-page-size page))
+                   (window-text-height nil t)))
+         (selected-window)))))
   (setq pdf-isearch-current-match nil))
 
 (defun pdf-isearch-mode-cleanup ()
@@ -371,9 +360,7 @@ This is a Isearch interface function."
   (setq pdf-isearch-current-page (pdf-view-current-page)
         pdf-isearch-current-match nil
         pdf-isearch-current-matches nil
-        pdf-isearch-current-parameter nil)
-  (unless pdf-view-roll-minor-mode
-    (goto-char (1+ (/ (buffer-size) 2)))))
+        pdf-isearch-current-parameter nil))
 
 (defun pdf-isearch-same-search-p (&optional ignore-search-string-p)
   "Return non-nil, if search parameter have not changed.

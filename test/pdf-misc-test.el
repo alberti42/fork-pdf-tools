@@ -5,8 +5,8 @@
 (ert-deftest pdf-misc-size-indication-draws-no-page ()
   "The mode-line construct may not draw a page: it runs during redisplay.
 
-Under `pdf-view-roll-minor-mode' `pdf-view-image-size' draws the page when
-the window has not drawn it, and a draw waits for the server."
+`pdf-view-image-size' draws the page when the window has not drawn it,
+and a draw waits for the server."
   (pdf-test-with-test-pdf
     (let (drawn queried)
       (cl-letf (((symbol-function 'image-mode-window-get)
@@ -18,24 +18,22 @@ the window has not drawn it, and a draw waits for the server."
                  (lambda (&rest _) (setq drawn t)))
                 ((symbol-function 'pdf-info-query)
                  (lambda (cmd &rest _) (setq queried cmd))))
-        (setq-local pdf-view-roll-minor-mode t)
         (should (equal "" (pdf-misc-size-indication)))
         (should-not drawn)
         (should-not queried)))))
 
 (ert-deftest pdf-misc-size-indication-measures-a-drawn-page ()
-  "A page the window already shows is measured, and nothing is drawn.
-
-The display property outside roll mode is the image specification itself,
-not a list naming it."
+  "A page the window already shows is measured, and nothing is drawn."
   (pdf-test-with-test-pdf
-    (let ((image '(image :type png :width 10 :height 400))
+    (let ((overlay (make-overlay 1 1))
           drawn)
+      (overlay-put overlay 'display '(image :type png :width 10 :height 400))
       (cl-letf (((symbol-function 'pdf-view-display-page)
                  (lambda (&rest _) (setq drawn t)))
-                ((symbol-function 'image-get-display-property) (lambda () image))
+                ((symbol-function 'image-mode-window-get)
+                 (lambda (prop &optional _w) (when (eq prop 'page) 1)))
+                ((symbol-function 'pdf-roll-page-overlay) (lambda (&rest _) overlay))
                 ((symbol-function 'image-display-size) (lambda (&rest _) '(10 . 400))))
-        (setq-local pdf-view-roll-minor-mode nil)
         (should (pdf-view-page-displayed-p))
         (should-not (equal "" (pdf-misc-size-indication)))
         (should-not drawn)))))

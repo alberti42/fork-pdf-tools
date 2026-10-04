@@ -42,7 +42,6 @@
 (declare-function image-set-window-vscroll "image-mode")
 (declare-function image-set-window-hscroll "image-mode")
 
-(defvar pdf-view-roll-minor-mode)
 
 
 ;; * ================================================================== *
@@ -377,62 +376,16 @@ needed."
                                (- edges-right win-width)))
                         (frame-char-width)))))))))
 
-(defun pdf-util-required-vscroll (edges &optional eager-p context-pixel)
-  "Return the amount of scrolling necessary, to make image EDGES visible.
+(defun pdf-util-required-vscroll (edges &optional _eager-p context-pixel)
+  "Return the vscroll that shows the top of image EDGES in the window.
 
-Scroll as little as necessary.  Unless EAGER-P is non-nil, in
-which case scroll as much as possible.
-
-Keep CONTEXT-PIXEL pixel of the image visible at the bottom and
-top of the window.  CONTEXT-PIXEL defaults to an equivalent pixel
-value of `next-screen-context-lines'.
-
-Return the required vscroll in pixels or nil, if scrolling is not
-needed.
-
-Note: For versions of emacs before 27 this will return lines instead of
-pixels. This is because of a change that occurred to `image-mode' in 27."
+EDGES are in pixels of the page.  The vscroll leaves CONTEXT-PIXEL
+pixels above them in view; CONTEXT-PIXEL defaults to an equivalent
+pixel value of `next-screen-context-lines'.  _EAGER-P is ignored."
   (pdf-util-assert-pdf-window)
-  (if pdf-view-roll-minor-mode
-      (max 0 (- (nth 1 edges)
-                (or context-pixel
-                    (* next-screen-context-lines (frame-char-height)))))
-    (let* ((win (window-inside-pixel-edges))
-           (image-height (cdr (pdf-view-image-size
-                               (unless pdf-view-roll-minor-mode
-                                 t))))
-           (image-top (window-vscroll nil t))
-           (edges (pdf-util-translate
-                   edges
-                   (pdf-view-image-offset) t)))
-      (pdf-util-with-edges (win edges)
-        (let* ((context-pixel (or context-pixel
-                                  (* next-screen-context-lines
-                                     (frame-char-height))))
-               ;;Be careful not to modify edges.
-               (edges-top (- edges-top context-pixel))
-               (edges-bot (+ edges-bot context-pixel))
-               (vscroll
-                (cond ((< edges-top image-top)
-                       (max 0 (if eager-p
-                                  (- edges-bot win-height)
-                                edges-top)))
-                      ((> (min image-height
-                               edges-bot)
-                          (+ image-top win-height))
-                       (min (- image-height win-height)
-                            (if eager-p
-                                edges-top
-                              (- edges-bot win-height)))))))
-
-
-          (when vscroll
-            (round
-             ;; `image-set-window-vscroll' changed in version 27 to using
-             ;; pixels, not lines.
-             (if (version< emacs-version "27")
-                 (/ vscroll (float (frame-char-height)))
-               vscroll))))))))
+  (max 0 (- (nth 1 edges)
+            (or context-pixel
+                (* next-screen-context-lines (frame-char-height))))))
 
 (defun pdf-util-scroll-to-edges (edges &optional eager-p)
   "Scroll window such that image EDGES are visible.
@@ -1086,11 +1039,8 @@ Return the converted PNG image as a string.  See also
 
   (pdf-util-assert-pdf-window)
   (let ((image (pdf-view-displayed-image)))
-    ;; `pdf-view-current-image' stood here.  Only the non-roll branch of
-    ;; `pdf-view-display-image' writes that window property, so a page a
-    ;; window has only ever drawn through `pdf-roll-display-image' has
-    ;; none, and the nil reached `convert' as a file name.  Asking the
-    ;; window what it displays cannot go stale either.
+    ;; The image is on the overlay holding the page; no window property
+    ;; holds it.
     (unless image
       (error "This page has no image to convert"))
     (apply #'pdf-util-convert-image image specs)))

@@ -35,7 +35,6 @@
       (let ((buffer (gui-check-open file))
             (window (selected-window))
             (step 0))
-        (pdf-view-roll-minor-mode 1)
         (cl-flet ((record (what)
                     (gui-check-settle)
                     (let ((pages (sort (copy-sequence
