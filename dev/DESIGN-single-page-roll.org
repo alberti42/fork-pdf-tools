@@ -100,7 +100,7 @@ Inside =pdf-roll.el=, =pdf-roll--get-display-property= (=pdf-roll.el:607=) advis
 
 * Known issues to check
 
-- Upstream #345, last: pdf-roll clobbers other overlays that carry a =window= property, such as the region highlight.
+- Upstream #345: fixed by the change of upstream PR #361, which =merged= carries -- =pdf-roll--pos-overlay= matches the category as well as the =window= property.  =check-region-overlay= reproduces the bug on upstream master (the region's overlay holds page 2 after eight wheel scrolls) and passes here.
 
 * Next steps
 
