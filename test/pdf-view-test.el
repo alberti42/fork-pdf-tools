@@ -346,3 +346,14 @@ processes' filters and sentinels in the middle of that redisplay."
       (cl-letf (((symbol-function 'image-mode-window-get)
                  (lambda (prop &optional _w) (when (eq prop 'page) 3))))
         (should (equal " P3/???" (pdf-test-mode-line-position)))))))
+
+(ert-deftest pdf-view-desired-image-size-keeps-the-aspect-under-the-cap ()
+  "Capping the width at `pdf-view-max-image-width' reduces the height too."
+  (pdf-test-with-test-pdf
+    (pdf-view-mode)
+    (cl-letf (((symbol-function 'pdf-cache-pagesize) (lambda (_) '(600 . 800))))
+      (let ((pdf-view-display-size 2.0))
+        (let ((pdf-view-max-image-width nil))
+          (should (equal '(1200 . 1600) (pdf-view-desired-image-size 1))))
+        (let ((pdf-view-max-image-width 600))
+          (should (equal '(600 . 800) (pdf-view-desired-image-size 1))))))))

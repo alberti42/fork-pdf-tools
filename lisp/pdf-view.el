@@ -1476,8 +1476,8 @@ If WINDOW is t, redisplay pages in all windows."
     (let ((width (floor (* (car pagesize) scale)))
           (height (floor (* (cdr pagesize) scale))))
       (when (> width (max 1 (or pdf-view-max-image-width width)))
-        (setq width pdf-view-max-image-width
-              height (* height (/ (float pdf-view-max-image-width) width))))
+        (setq height (floor (* height (/ (float pdf-view-max-image-width) width)))
+              width pdf-view-max-image-width))
       (cons (max 1 width) (max 1 height)))))
 
 (defun pdf-view-text-regions-hotspots-function (page size)
