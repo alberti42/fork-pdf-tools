@@ -31,6 +31,7 @@ A graphical frame opens for each check and closes when it ends.
 | =check-revert=           | yes   | after =revert-buffer= the pages drawn before stay, stale, through the first redisplay, then show their new render; a revert to another number of pages makes the overlays anew |
 | =check-reshape=          | yes   | after a rotation, a zoom, a slice or a revert, a page that had an image shows one of the size it is to have on the first redisplay |
 | =check-isearch-wrap=     | yes   | isearch wrapping forward and backward lands on the same page and vscroll in roll mode as in plain mode |
+| =check-hscroll=          | yes   | on a page wider than the window, =C-f= moves a column, =C-e= reaches the right edge, vertical scrolling keeps the position, and a zoom out or fit-width brings it within the page |
 | =check-mode-line=        | yes   | the size indication in the mode line never draws a page                                                              |
 | =check-single-page=      | yes   | =pdf-view-single-page-mode= gives the page and vscroll plain mode gives, key by key; at fit-page =C-n= and =C-p= turn the page |
 | =check-page-sizes=       | no    | each of 250 pages of different widths gets its own size from =pdf-cache-read-pagesizes=                              |
