@@ -36,6 +36,7 @@ A graphical frame opens for each check and closes when it ends.
 | =check-hscroll=          | yes   | on a page wider than the window, =C-f= moves a column, =C-e= reaches the right edge, vertical scrolling keeps the position, and a zoom out or fit-width brings it within the page |
 | =check-mode-line=        | yes   | the size indication in the mode line never draws a page                                                              |
 | =check-single-page=      | yes   | =pdf-view-single-page-mode= gives the page and vscroll plain mode gives, key by key; at fit-page =C-n= and =C-p= turn the page |
+| =check-wheel=            | yes   | trackpad events scroll: gentle ones by whole lines without =pixel-scroll-precision-mode=, exactly with it, back to the start after going down and up across pages, and turning the page in the single-page view |
 | =check-page-sizes=       | no    | each of 250 pages of different widths gets its own size from =pdf-cache-read-pagesizes=                              |
 | =check-long-document=    | no    | a document of 2000 pages opens with every page size cached; reports how long that takes                             |
 | =check-nested-query=     | no    | a synchronous query made from inside the handler of an asynchronous reply returns what it returns outside           |
