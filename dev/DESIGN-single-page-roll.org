@@ -106,3 +106,11 @@ Inside =pdf-roll.el=, =pdf-roll--get-display-property= (=pdf-roll.el:607=) advis
 
 2. (Done, see the commit that adds this line.)  Build =pdf-view-single-page-mode= on top of today's =pdf-view-roll-minor-mode=: only the current page shows, the margins are hidden, the vscroll is clamped to the page, and scrolling past the bottom or the top turns the page as the tables above say.  A graphical check compares it with plain mode key by key.
 3. (Done.)  =pdf-view-mode= draws with the machinery of =pdf-roll.el= and the plain-mode path is deleted with the 26 branches, in one step rather than two (decided 2026-10-04: no fallback option; the branch itself is the fallback while it is tested).  =pdf-view-roll-minor-mode= is an obsolete command that warns once per session and does nothing; the plain scrolling commands are obsolete aliases of the pdf-roll ones.  Plain mode's behaviour is kept as a recording, =test/gui/fixtures/plain-mode.eld=, which =check-single-page= and =check-isearch-wrap= compare with.
+
+* Later, as a project of its own: how the package is activated
+
+Recorded 2026-10-04; not part of this work.
+
+Today a user calls one of two functions from the init file.  =pdf-tools-install= (=pdf-tools.el:367=) checks that =epdfinfo= runs, asks to build it if not, and then, in =pdf-tools-install-noverify= (=pdf-tools.el:423=), adds =pdf-view-mode= to =auto-mode-alist= and =magic-mode-alist=, turns on the global minor modes, puts =pdf-tools-enable-minor-modes= on =pdf-view-mode-hook=, and switches the open PDF buffers to =pdf-view-mode=.  =pdf-loader-install= (=lisp/pdf-loader.el=, 2018) defers that: it puts an anonymous function in both alists, which Emacs calls as the major mode of the first PDF visited; the function removes its entries and calls =pdf-tools-install=.
+
+What is wrong with it: a lambda acts as a major mode in =auto-mode-alist=; activating the package is mixed with building the server; and every user needs a call in the init file.  A modern package needs none: an autoload cookie on =pdf-view-mode= and autoloaded =auto-mode-alist= and =magic-mode-alist= entries make PDFs open in =pdf-view-mode= by themselves, and the check of =epdfinfo= can run when =pdf-view-mode= starts.  This touches every user's init file, so =pdf-tools-install= and =pdf-loader-install= would have to stay working, as obsolete functions, for a while.
