@@ -475,3 +475,9 @@ server."
                 ((symbol-function 'pdf-view-page-stale-p) (lambda (&rest _) t)))
         (pdf-view-mouse-set-region event)
         (should-not tracked)))))
+
+(ert-deftest pdf-view-continuous-is-an-alias ()
+  "The old name of `pdf-view-turn-page-at-top-and-bottom' still works."
+  (let ((pdf-view-continuous nil))
+    (should-not pdf-view-turn-page-at-top-and-bottom))
+  (should (get 'pdf-view-continuous 'byte-obsolete-variable)))

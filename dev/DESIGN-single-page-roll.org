@@ -36,13 +36,13 @@ What the single-page view must do, taken from =pdf-view-mode-map= (=pdf-view.el=
 | =M-<=, =M->= | first, last page | same |
 | =M-g g= (=goto-line=), =M-g l= | go to page, to label | same |
 | =SPC=, =S-SPC=, =DEL= | scroll a screen; at the page's edge turn the page, landing at the top (forward) or the bottom (backward) | scroll a screen across pages (one line before the decision below) |
-| =C-n=, =C-p=, =<down>=, =<up>= | scroll a line; at the edge turn the page if =pdf-view-continuous= | scroll a line across pages |
+| =C-n=, =C-p=, =<down>=, =<up>= | scroll a line; at the bottom or top turn the page if =pdf-view-turn-page-at-top-and-bottom= | scroll a line across pages |
 | =RET= | =image-next-line=: a line down, no page turn | =image-next-line= on the current page ? |
-| Mouse wheel | =pdf-view-scroll-up-or-next-page= with a line count: turns the page at the edge if =pdf-view-continuous= | =pdf-roll-scroll-forward= across pages |
+| Mouse wheel | =pdf-view-scroll-up-or-next-page= with a line count: turns the page at the bottom or top if =pdf-view-turn-page-at-top-and-bottom= | =pdf-roll-scroll-forward= across pages |
 | At fit-height or fit-page | any scroll turns the page (=pdf-view.el:977= and =1002=, a workaround for rounding) | scrolls across pages |
 | =S-<next>=, =S-<prior>= | not bound | scroll a screen across pages |
 
-=pdf-view-continuous= (default t) decides whether line scrolling and the wheel turn the page at an edge.  With nil, only =SPC= and =DEL= without a prefix argument do.
+=pdf-view-turn-page-at-top-and-bottom= (default t; called =pdf-view-continuous= before 2026-10-04, which stays as an obsolete alias) decides whether line scrolling and the wheel turn the page past its bottom or top.  With nil, only =SPC= and =DEL= without a prefix argument do.
 
 ** Features that read the page or the position
 

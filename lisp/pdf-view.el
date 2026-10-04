@@ -77,12 +77,17 @@ other value behaves like `fit-width'."
   :group 'pdf-view
   :type 'number)
 
-(defcustom pdf-view-continuous t
-  "In Continuous mode reaching the page edge advances to next/previous page.
+(define-obsolete-variable-alias 'pdf-view-continuous
+  'pdf-view-turn-page-at-top-and-bottom "1.4.0")
+(defcustom pdf-view-turn-page-at-top-and-bottom t
+  "Whether scrolling past the top or bottom of a page turns the page.
 
-When non-nil, scrolling a line upward at the bottom edge of the page
-moves to the next page, and scrolling a line downward at the top edge
-of the page moves to the previous page."
+When non-nil, scrolling down past the bottom of the page shows the next
+page from its top, and scrolling up past the top shows the previous page
+from its bottom, by lines and with the mouse wheel alike.  When nil,
+scrolling stops at the top and bottom of the page, and only SPC and DEL
+without a prefix argument, or the commands that turn pages, move to
+another page.  It applies when one page is shown at a time."
   :type 'boolean
   :group 'pdf-view)
 
@@ -962,11 +967,11 @@ This command is a wrapper for `pdf-view-previous-page'."
 (defun pdf-view-scroll-up-or-next-page (&optional arg)
   "Scroll page up ARG lines if possible, else go to the next page.
 
-When `pdf-view-continuous' is non-nil, scrolling upward at the
-bottom edge of the page moves to the next page.  Otherwise, go to
-next page only on typing SPC (ARG is nil)."
+When `pdf-view-turn-page-at-top-and-bottom' is non-nil, scrolling
+upward at the bottom edge of the page moves to the next page.
+Otherwise, go to next page only on typing SPC (ARG is nil)."
   (interactive "P")
-  (if (or pdf-view-continuous (null arg))
+  (if (or pdf-view-turn-page-at-top-and-bottom (null arg))
       (let ((hscroll (window-hscroll))
             (cur-page (pdf-view-current-page))
             (win-scroll (window-vscroll nil pdf-view-have-image-mode-pixel-vscroll))
@@ -987,11 +992,11 @@ next page only on typing SPC (ARG is nil)."
 (defun pdf-view-scroll-down-or-previous-page (&optional arg)
   "Scroll page down ARG lines if possible, else go to the previous page.
 
-When `pdf-view-continuous' is non-nil, scrolling downward at the
-top edge of the page moves to the previous page.  Otherwise, go
-to previous page only on typing DEL (ARG is nil)."
+When `pdf-view-turn-page-at-top-and-bottom' is non-nil, scrolling
+downward at the top edge of the page moves to the previous page.
+Otherwise, go to previous page only on typing DEL (ARG is nil)."
   (interactive "P")
-  (if (or pdf-view-continuous (null arg))
+  (if (or pdf-view-turn-page-at-top-and-bottom (null arg))
       (let ((hscroll (window-hscroll))
             (cur-page (pdf-view-current-page))
             (win-scroll (window-vscroll nil pdf-view-have-image-mode-pixel-vscroll))
@@ -1012,10 +1017,10 @@ to previous page only on typing DEL (ARG is nil)."
 (defun pdf-view--next-line-or-next-page (&optional arg)
   "Scroll upward by ARG lines if possible, else go to the next page.
 
-When `pdf-view-continuous' is non-nil, scrolling a line upward
-at the bottom edge of the page moves to the next page."
+When `pdf-view-turn-page-at-top-and-bottom' is non-nil, scrolling a
+line upward at the bottom edge of the page moves to the next page."
   (interactive "p")
-  (if pdf-view-continuous
+  (if pdf-view-turn-page-at-top-and-bottom
       (let ((hscroll (window-hscroll))
             (cur-page (pdf-view-current-page)))
         (when (= (window-vscroll nil pdf-view-have-image-mode-pixel-vscroll)
@@ -1036,10 +1041,10 @@ at the bottom edge of the page moves to the next page."
 (defun pdf-view--previous-line-or-previous-page (&optional arg)
   "Scroll downward by ARG lines if possible, else go to the previous page.
 
-When `pdf-view-continuous' is non-nil, scrolling a line downward
-at the top edge of the page moves to the previous page."
+When `pdf-view-turn-page-at-top-and-bottom' is non-nil, scrolling a
+line downward at the top edge of the page moves to the previous page."
   (interactive "p")
-  (if pdf-view-continuous
+  (if pdf-view-turn-page-at-top-and-bottom
       (let ((hscroll (window-hscroll))
             (cur-page (pdf-view-current-page)))
         (when (= (window-vscroll nil pdf-view-have-image-mode-pixel-vscroll)
@@ -1922,7 +1927,7 @@ a page that still shows a document since closed, see
                  (pdf-view-current-page)))
          (margin (frame-char-height))
          (selection-style (or selection-style pdf-view-selection-style))
-         pdf-view-continuous
+         pdf-view-turn-page-at-top-and-bottom
          region)
     (setq pdf-view-active-region (list page))
     (when (pdf-util-track-mouse-dragging (event 0.05)
