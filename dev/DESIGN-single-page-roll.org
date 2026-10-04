@@ -22,7 +22,7 @@ What the single-page view must do, taken from =pdf-view-mode-map= (=pdf-view.el=
 | =W= fit width, =H= fit height, =P= fit page | the page fills the window that way; =P= shows the whole page | same sizes; the next page shows below |
 | =+= =-= =0= zoom | rescale the page | same |
 | A page narrower than the window | centred | centred |
-| A page wider than the window | hscroll | hscroll ? |
+| A page wider than the window | hscroll | hscroll by image-mode's commands, a column per =C-f=; kept within the widest drawn page since 2026-10-04 (=check-hscroll=) |
 | =s m=, =s b=, =s r=, =s c= slices | crop the page | same |
 | =R= rotate | rotates the page | same |
 | Several windows on one buffer | each shows its own page | each scrolls on its own |

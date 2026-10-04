@@ -309,6 +309,20 @@ If WINDOW is t, redisplay every window showing the current buffer."
       (setf (alist-get win pdf-roll--state) nil)
       (force-window-update win))))
 
+(defun pdf-roll--limit-hscroll (window pages)
+  "Keep the hscroll of WINDOW within the widest of PAGES.
+A page that fits the window, after fit-width or a zoom out, is not
+scrolled at all."
+  (let ((limit (ceiling (max 0 (- (apply #'max 0 (mapcar (lambda (page)
+                                                            (car (pdf-view-displayed-page-size
+                                                                  page window)))
+                                                          pages))
+                                  (window-body-width window t)))
+                        (frame-char-width (window-frame window)))))
+    (when (> (window-hscroll window) limit)
+      (image-mode-window-put 'hscroll limit window)
+      (set-window-hscroll window limit))))
+
 (defun pdf-roll-pre-redisplay (win)
   "Handle modifications to the state in window WIN.
 It should be added to `pre-redisplay-functions' buffer locally."
@@ -358,6 +372,7 @@ It should be added to `pre-redisplay-functions' buffer locally."
           ;; might be multiple image that need to get updated
           (pdf-roll-undisplay-pages (cl-set-difference old new) win)
           (image-mode-window-put 'displayed-pages new win)
+          (pdf-roll--limit-hscroll win new)
           (set-window-point win (+ start
                                    (if (pos-visible-in-window-p (+ 2 start) win) 2 0))))
         ;; Remember the state only if the pages were really drawn.  A revert
