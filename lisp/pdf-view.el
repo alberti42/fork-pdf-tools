@@ -541,6 +541,11 @@ PNG images in Emacs buffers."
   ;; Enable transient-mark-mode, so region deactivation when quitting
   ;; will work.
   (setq-local transient-mark-mode t)
+  ;; The buffer holds a line per page and per margin, nothing to number,
+  ;; and the numbers break horizontal scrolling.  Turned off here, during
+  ;; the major mode's setup, they stay off when
+  ;; `global-display-line-numbers-mode' is on.
+  (display-line-numbers-mode -1)
 
   (add-hook 'deactivate-mark-hook 'pdf-view-deactivate-region nil t)
   (add-hook 'write-contents-functions

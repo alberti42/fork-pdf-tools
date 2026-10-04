@@ -457,10 +457,7 @@ Once you have read through the features provided by ~pdf-tools~, you probably wa
 :END:
 This mode is an alternative to ~linum-mode~ and is available since Emacs 26. ~pdf-tools~ does not work well with it. For example, it makes horizontal navigation (such as ~C-f~, ~C-b~, ~C-x <~ or ~C-x >~ ) in a document impossible.
 
-If you use ~display-line-numbers-mode~ globally, you should disable it for ~pdf-view-mode~:
-#+begin_src elisp
-  (add-hook 'pdf-view-mode-hook (lambda () (display-line-numbers-mode -1)))
-#+end_src
+~pdf-view-mode~ turns it off in its buffers, also when ~global-display-line-numbers-mode~ is on, so no hook is needed.
 
 ** auto-revert
 :PROPERTIES:

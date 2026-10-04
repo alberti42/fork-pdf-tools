@@ -479,3 +479,20 @@ server."
   (let ((pdf-view-continuous nil))
     (should-not pdf-view-turn-page-at-top-and-bottom))
   (should (get 'pdf-view-continuous 'byte-obsolete-variable)))
+
+(ert-deftest pdf-view-mode-has-no-line-numbers ()
+  "`global-display-line-numbers-mode' leaves PDF buffers alone."
+  (let ((global global-display-line-numbers-mode))
+    (unwind-protect
+        (progn
+          (global-display-line-numbers-mode 1)
+          (pdf-test-with-test-pdf
+            (pdf-view-mode)
+            ;; What the command loop does after a major mode change.
+            (run-hooks 'post-command-hook)
+            (should-not display-line-numbers-mode))
+          (with-temp-buffer
+            (text-mode)
+            (run-hooks 'post-command-hook)
+            (should display-line-numbers-mode)))
+      (global-display-line-numbers-mode (if global 1 -1)))))
