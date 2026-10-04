@@ -213,22 +213,19 @@ on the image, so it does not depend on the image being there."
         (pdf-roll-display-image (pdf-view-create-page page window) page window)))
     (cdr (pdf-view-displayed-page-size page window))))
 
-(defun pdf-roll-display-pages (page &optional window force pscrolling)
+(defun pdf-roll-display-pages (page &optional window force)
   "Display pages to fill the WINDOW starting from PAGE.
 If FORCE is non-nill redisplay a page even if it is already displayed.
 With `pdf-view-single-page-mode', display PAGE alone."
   (if pdf-view-single-page-mode
       (pdf-view-single-page--display page window force)
-    (pdf-roll--display-pages page window force pscrolling)))
+    (pdf-roll--display-pages page window force)))
 
-(defun pdf-roll--display-pages (page window force pscrolling)
+(defun pdf-roll--display-pages (page window force)
   "Display pages to fill the WINDOW starting from PAGE.
-FORCE and PSCROLLING are as in `pdf-roll-display-pages'."
+FORCE is as in `pdf-roll-display-pages'."
   (let (displayed
         (available-height (window-pixel-height window)))
-    (when (and pscrolling (> page 1))
-      (pdf-roll-display-page (1- page) window force)
-      (push (1- page) displayed))
     (let ((vscroll (image-mode-window-get 'vscroll window))
           (im-height (pdf-roll-display-page page window force)))
       (pdf-roll-set-vscroll (min vscroll (1- im-height)) window)
@@ -236,9 +233,6 @@ FORCE and PSCROLLING are as in `pdf-roll-display-pages'."
     (push page displayed)
     (while (and (> available-height 0) (< page (pdf-cache-number-of-pages)))
       (cl-callf - available-height (pdf-roll-display-page (cl-incf page) window force))
-      (push page displayed))
-    (when (and pscrolling (< page (pdf-cache-number-of-pages)))
-      (pdf-roll-display-page (cl-incf page) window force)
       (push page displayed))
     ;; store displayed images for determining which images to update when update
     ;; is triggered
@@ -331,13 +325,7 @@ It should be added to `pre-redisplay-functions' buffer locally."
       (pdf-roll-new-window-function win))
     (let* ((pdf-roll--delay-revert t)
            (state (alist-get win pdf-roll--state))
-           (pscrolling (memq last-command
-                             '(pixel-scroll-precision pixel-scroll-start-momentum
-                               pixel-scroll-interpolate-up pixel-scroll-interpolate-down)))
-           (page (progn (when pscrolling
-                          (setf (pdf-view-current-page win)
-                                (/ (min (+ (window-start win) 5) (point-max)) 4)))
-                        (pdf-view-current-page win)))
+           (page (pdf-view-current-page win))
            (height (window-pixel-height win))
            (vscroll (image-mode-window-get 'vscroll win))
            (size-changed (not (and (eq height (nth 1 state))
@@ -347,27 +335,20 @@ It should be added to `pre-redisplay-functions' buffer locally."
            (start (pdf-roll-page-to-pos page)))
       (when pdf-view-single-page-mode
         (pdf-view-single-page--hide win page))
-      (if (and pscrolling
-               (or (not (eq start (- (point-max) 3)))
-                   (let ((visible-pixels (nth 4 (pos-visible-in-window-p start win t))))
-                     (and visible-pixels (> visible-pixels (/ (window-text-height win t) 2))))
-                   (prog1 nil (message "End of buffer"))))
-          (progn (image-mode-window-put 'vscroll (window-vscroll win t) win)
-                 (image-mode-window-put 'hscroll (window-hscroll win)) win)
-        (set-window-vscroll win vscroll t)
-        (set-window-hscroll win (or (image-mode-window-get 'hscroll win) 0))
-        (set-window-start win start t)
-        ;; With NOFORCE, redisplay picks another start when point is not
-        ;; visible from this one, and point is set below only when the
-        ;; state has changed.  A window configuration saved before a
-        ;; revert brings point back at 1, where its markers collapsed, so
-        ;; the window would show the placeholder of page 1.
-        (unless (<= start (window-point win) (+ start 3))
-          (set-window-point win start)))
+      (set-window-vscroll win vscroll t)
+      (set-window-hscroll win (or (image-mode-window-get 'hscroll win) 0))
+      (set-window-start win start t)
+      ;; With NOFORCE, redisplay picks another start when point is not
+      ;; visible from this one, and point is set below only when the
+      ;; state has changed.  A window configuration saved before a
+      ;; revert brings point back at 1, where its markers collapsed, so
+      ;; the window would show the placeholder of page 1.
+      (unless (<= start (window-point win) (+ start 3))
+        (set-window-point win start))
       (setq disable-point-adjustment t)
       (when (or size-changed page-changed vscroll-changed)
         (let ((old (image-mode-window-get 'displayed-pages win))
-              (new (pdf-roll-display-pages page win size-changed pscrolling)))
+              (new (pdf-roll-display-pages page win size-changed)))
           ;; If images/pages are small enough (or after jumps), there
           ;; might be multiple image that need to get updated
           (pdf-roll-undisplay-pages (cl-set-difference old new) win)
@@ -518,8 +499,9 @@ so that a trackpad scrolls smoothly, the momentum macOS sends after a
 flick included.  Without it, scroll by whole lines: the pixels of
 successive events of one gesture add up, and the page moves each time
 they make a line, so that a gentle gesture, which macOS reports as no
-line at all, still scrolls.  In `pdf-view-single-page-mode' the page turns at its
-bottom and top as `pdf-view-turn-page-at-top-and-bottom' says."
+line at all, still scrolls.  In `pdf-view-single-page-mode' the page
+turns at its bottom and top as `pdf-view-turn-page-at-top-and-bottom'
+says."
   (interactive "e")
   (let ((window (posn-window (event-start event))))
     (with-selected-window (if (windowp window) window (selected-window))
@@ -545,13 +527,23 @@ bottom and top as `pdf-view-turn-page-at-top-and-bottom' says."
 
 (defvar pdf-roll--wheel-keymap
   (let ((map (make-sparse-keymap)))
-    (define-key map [wheel-up] #'pdf-roll-wheel-scroll)
-    (define-key map [wheel-down] #'pdf-roll-wheel-scroll)
+    (dolist (prefix '(nil mode-line header-line left-margin right-margin
+                          left-fringe right-fringe))
+      (dolist (event '(wheel-up wheel-down))
+        (define-key map (vconcat (and prefix (list prefix)) (list event))
+                    #'pdf-roll-wheel-scroll))
+      ;; Emacs's simulated momentum, which scrolls through
+      ;; `pixel-scroll-precision'; macOS sends its own as wheel events.
+      (define-key map (vconcat (and prefix (list prefix)) [touch-end]) #'ignore))
+    (define-key map [next] #'pdf-view-page-down)
+    (define-key map [prior] #'pdf-view-page-up)
     map)
-  "The wheel bindings of PDF buffers.
-`pdf-roll-setup' puts them in `minor-mode-overriding-map-alist', which
-outranks the keymaps of minor modes: `pixel-scroll-precision-mode' binds
-the wheel in its own.")
+  "The bindings of PDF buffers that `pixel-scroll-precision-mode' would take.
+That mode binds the wheel, also over the mode line, the header line,
+the margins and the fringes, `touch-end', and PageDown and PageUp.
+`pdf-roll-setup' puts these bindings in
+`minor-mode-overriding-map-alist', which outranks the keymaps of minor
+modes.")
 
 (defvar pdf-roll--wheel-keymap-active t
   "Always non-nil; it keys `pdf-roll--wheel-keymap'.
