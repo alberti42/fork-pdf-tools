@@ -25,6 +25,7 @@
 - Isearch no longer signals "Invalid image specification" when it wraps backward.
 - A page whose width is capped by ~pdf-view-max-image-width~ keeps its proportions.
 - A page is shown at the same height whichever cached image it is drawn from.
+- ~pdf-view-mode~ turns ~display-line-numbers-mode~ off in its buffers, also under ~global-display-line-numbers-mode~; the hook the README recommended is no longer needed.
 
 ** Changes to options and commands
 - ~pdf-view-continuous~ is renamed ~pdf-view-turn-page-at-top-and-bottom~, which says what it does: scrolling past the bottom or the top of a page turns the page.  The old name is an obsolete alias.
