@@ -1,0 +1,102 @@
+#+TITLE: A single-page view in pdf-roll
+
+Started 2026-10-04 on =feat/single-page-roll=, a branch from =feat/async-render=.  File and line references are to that branch as of 2026-10-04.  This is step 1 of the plan at the end of =DESIGN-async-render.org=: write down what the single-page experience is, before building it.
+
+* Goal
+
+pdf-roll becomes the main mode.  The single-page experience of plain =pdf-view-mode= becomes an option within it, built on the machinery of =feat/async-render=: computed geometry, placeholders, the asynchronous render, the revert that keeps pages, the generation guard and reshaping.  Then the plain-mode path is deleted.
+
+* Plain mode today
+
+=pdf-view-mode= was written in 2013--2014 on the model of =image-mode=.  Each window shows one page as one image on one overlay that spans the whole buffer (=pdf-view-display-image=, =pdf-view.el:1494=).  Scrolling within the page is image-mode's vscroll and hscroll; turning a page replaces the image.  A page is redrawn after a window resize from =window-configuration-change-hook= (=pdf-view-redisplay-some-windows=).
+
+* The single-page experience: checklist
+
+What the single-page view must do, taken from =pdf-view-mode-map= (=pdf-view.el=) and the commands it binds.  "Roll today" says what continuous mode does with the same key; "?" marks behaviour not yet checked.
+
+** Display
+
+| Item | Plain mode | Roll today |
+|------+------------+------------|
+| One page per window | yes | as many pages as fit |
+| =W= fit width, =H= fit height, =P= fit page | the page fills the window that way; =P= shows the whole page | same sizes; the next page shows below |
+| =+= =-= =0= zoom | rescale the page | same |
+| A page narrower than the window | centred | centred |
+| A page wider than the window | hscroll | hscroll ? |
+| =s m=, =s b=, =s r=, =s c= slices | crop the page | same |
+| =R= rotate | rotates the page | same |
+| Several windows on one buffer | each shows its own page | each scrolls on its own |
+| Window resized | the page is redrawn at the new size | same, from =pdf-roll-pre-redisplay= |
+
+** Moving
+
+| Keys | Plain mode | Roll today |
+|------+------------+------------|
+| =n=, =p=, =<next>=, =<prior>= | next or previous page, at its top | same |
+| =M-<=, =M->= | first, last page | same |
+| =M-g g= (=goto-line=), =M-g l= | go to page, to label | same |
+| =SPC=, =S-SPC=, =DEL= | scroll a screen; at the page's edge turn the page, landing at the top (forward) or the bottom (backward) | remapped to =pdf-roll-scroll-forward=/=-backward=, which without an argument scroll *one line* |
+| =C-n=, =C-p=, =<down>=, =<up>= | scroll a line; at the edge turn the page if =pdf-view-continuous= | scroll a line across pages |
+| =RET= | =image-next-line=: a line down, no page turn | =image-next-line= on the current page ? |
+| Mouse wheel | =pdf-view-scroll-up-or-next-page= with a line count: turns the page at the edge if =pdf-view-continuous= | =pdf-roll-scroll-forward= across pages |
+| At fit-height or fit-page | any scroll turns the page (=pdf-view.el:977= and =1002=, a workaround for rounding) | scrolls across pages |
+| =S-<next>=, =S-<prior>= | not bound | scroll a screen across pages |
+
+=pdf-view-continuous= (default t) decides whether line scrolling and the wheel turn the page at an edge.  With nil, only =SPC= and =DEL= without a prefix argument do.
+
+** Features that read the page or the position
+
+| Feature | Plain mode | Roll today |
+|---------+------------+------------|
+| Text selection, =M-down-mouse-1= rectangle, =C-down-mouse-1= extend | on the page shown | on the page under the mouse (=pdf-view-mouse-set-region=, three branches) |
+| =C-c C-i= extract region image | the region's page | same |
+| =m=, ='= registers | page and position within it | page and position ? |
+| Bookmarks | page, slice, size and =origin= (the position in the page), restored with =image-set-window-vscroll= | the same record; restoring =origin= ? |
+| Isearch | moves through the pages | same; wrapping fixed in =3f235fc= |
+| Links, =pdf-links-action-perform= hints | on the page shown | on every page drawn (=pdf-links.el:241=) |
+| SyncTeX backward search, mouse | the page shown | the page under the mouse (=pdf-sync.el:285=) |
+| Annotations: show, add text, read | the page shown | the page given (=pdf-annot.el:1028=, =1146=, =1633=) |
+| =pdf-util-required-vscroll= (scroll to show an edge) | image vscroll | pixel edges (=pdf-util.el:396=) |
+| Dark, midnight, themed, printer modes | redraw the page | redraw the pages |
+| Mode line: page, size indication | the page shown | the current page; draws nothing |
+| History, outline, occur | go to a page | same |
+
+* Where the code decides by mode
+
+26 places outside =pdf-roll.el= branch on =pdf-view-roll-minor-mode= (the figure 37 in =DESIGN-async-render.org= counted comments and declarations too).  A single-page view in pdf-roll takes the roll side of each; the plain side goes with the plain-mode path.
+
+| File | Line | Function | Decides |
+|------+------+----------+---------|
+| pdf-view.el | 732 | =pdf-view-revert-buffer= | revert without replacing the text |
+| pdf-view.el | 884 | =pdf-view-goto-page= | redisplay through =pdf-roll-pre-redisplay= |
+| pdf-view.el | 1032, 1056 | =pdf-view-next-line-or-next-page=, =previous= | scroll by roll's lines |
+| pdf-view.el | 1392 | =pdf-view--render-finish= | draw only in roll mode |
+| pdf-view.el | 1407 | =pdf-view-page-stale-p= | which overlay holds the page |
+| pdf-view.el | 1422 | =pdf-view-page-displayed-p= | which overlay holds the page |
+| pdf-view.el | 1449 | =pdf-view-displayed-image= | which overlay holds the page |
+| pdf-view.el | 1494 | =pdf-view-display-image= | where the image goes |
+| pdf-view.el | 1555 | =pdf-view-redisplay= | redisplay through pdf-roll |
+| pdf-view.el | 1902, 1920, 1982 | =pdf-view-mouse-set-region= | the page under the mouse; scrolling while dragging |
+| pdf-view.el | 2032 | =pdf-view-display-region= | the page the region is drawn on |
+| pdf-view.el | 2161 | =pdf-view-bookmark-make-record= | the buffer position recorded |
+| pdf-isearch.el | 288, 375 | =pdf-isearch-search-function=, =-mode-initialize= | where point goes |
+| pdf-isearch.el | 329 | =pdf-isearch-push-state-function= | redisplay after restoring a state |
+| pdf-isearch.el | 347 | =pdf-isearch-wrap-function= | how the end of the last page is shown |
+| pdf-annot.el | 1028, 1146, 1633 | show, add text, read an annotation | the page |
+| pdf-links.el | 241 | =pdf-links-read-link-action= | which pages get hints |
+| pdf-util.el | 396, 402 | =pdf-util-required-vscroll= | pixel edges or image vscroll |
+| pdf-sync.el | 285 | =pdf-sync-backward-search-mouse= | the page under the mouse |
+
+Inside =pdf-roll.el=, =pdf-roll--get-display-property= (=pdf-roll.el:607=) advises =image-get-display-property= to return the current page's display, which is what lets image-mode functions such as =image-scroll-up= work in roll mode.
+
+* Known issues to check
+
+- Upstream #345: pdf-roll clobbers other overlays that carry a =window= property, such as the region highlight.
+- =SPC= and =DEL= in roll mode scroll one line, not a screen.
+- The items marked "?" above.
+
+* Next steps
+
+2. Build the single-page view in pdf-roll: only the current page shows, the margins are hidden, the vscroll is clamped to the page, and an edge turns the page as the table above says.
+3. Make pdf-roll the default, the single-page view an option, and keep the old path behind a variable for a while.
+4. Delete the plain-mode path and the 26 branches with it.
