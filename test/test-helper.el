@@ -63,13 +63,17 @@
 (defmacro pdf-test-with-pdf (pdf-filename &rest body)
   (declare (indent 0) (debug t))
   (let ((buffer (make-symbol "buffer")))
-    `(let ((,buffer (find-file-noselect
-                     (expand-file-name ,pdf-filename)))
-           (pdf-info-epdfinfo-error-filename (make-temp-file "epdfinfo.log")))
+    `(let ((pdf-info-epdfinfo-error-filename (make-temp-file "epdfinfo.log"))
+           ,buffer)
        (unwind-protect
            (progn
+             ;; Start the server before visiting the file: visiting runs
+             ;; `pdf-view-mode' when `auto-mode-alist' says so, and the
+             ;; previous test quit the server, which in batch is not
+             ;; restarted without asking.
              (pdf-info-quit)
              (pdf-info-process-assert-running t)
+             (setq ,buffer (find-file-noselect (expand-file-name ,pdf-filename)))
              (with-current-buffer ,buffer ,@body))
          (when (buffer-live-p ,buffer)
            (with-current-buffer ,buffer
