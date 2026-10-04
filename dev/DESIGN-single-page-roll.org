@@ -50,8 +50,8 @@ What the single-page view must do, taken from =pdf-view-mode-map= (=pdf-view.el=
 |---------+------------+------------|
 | Text selection, =M-down-mouse-1= rectangle, =C-down-mouse-1= extend | on the page shown | on the page under the mouse (=pdf-view-mouse-set-region=, three branches) |
 | =C-c C-i= extract region image | the region's page | same |
-| =m=, ='= registers | page and position within it | page and position ? |
-| Bookmarks | page, slice, size and =origin= (the position in the page), restored with =image-set-window-vscroll= | the same record; restoring =origin= ? |
+| =m=, ='= registers | page and position within it | page and position, in both views (=check-position=) |
+| Bookmarks | page, slice, size and =origin= (the position in the page), restored with =image-set-window-vscroll= | the same record; =origin= restored in both views (=check-position=) |
 | Isearch | moves through the pages | same; wrapping fixed in =3f235fc= |
 | Links, =pdf-links-action-perform= hints | on the page shown | on every page drawn (=pdf-links.el:241=) |
 | SyncTeX backward search, mouse | the page shown | the page under the mouse (=pdf-sync.el:285=) |
@@ -100,7 +100,6 @@ Inside =pdf-roll.el=, =pdf-roll--get-display-property= (=pdf-roll.el:607=) advis
 
 * Known issues to check
 
-- The items marked "?" above.
 - Upstream #345, last: pdf-roll clobbers other overlays that carry a =window= property, such as the region highlight.
 
 * Next steps

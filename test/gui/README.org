@@ -29,6 +29,7 @@ A graphical frame opens for each check and closes when it ends.
 | =check-geometry=         | yes   | =pdf-view-displayed-page-size= equals =image-display-size= for 2880 combinations of page, slice, rotation, width cap, display size, relief and image cache |
 | =check-scroll-trace=     | yes   | 84 steps of scrolling, fit-page, slice and rotation in roll mode give the same trace with and without =pdf-view-render-asynchronously=, and no synchronous query from =pdf-roll-pre-redisplay= with it |
 | =check-revert=           | yes   | after =revert-buffer= the pages drawn before stay, stale, through the first redisplay, then show their new render; a revert to another number of pages makes the overlays anew |
+| =check-position=         | yes   | a register and a bookmark restore the page, the vscroll and the hscroll, in both views |
 | =check-reshape=          | yes   | after a rotation, a zoom, a slice or a revert, a page that had an image shows one of the size it is to have on the first redisplay |
 | =check-isearch-wrap=     | yes   | isearch wrapping forward and backward lands on the same page and vscroll in roll mode as in plain mode |
 | =check-hscroll=          | yes   | on a page wider than the window, =C-f= moves a column, =C-e= reaches the right edge, vertical scrolling keeps the position, and a zoom out or fit-width brings it within the page |
