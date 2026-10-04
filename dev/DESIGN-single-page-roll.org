@@ -93,6 +93,8 @@ Inside =pdf-roll.el=, =pdf-roll--get-display-property= (=pdf-roll.el:607=) advis
 
 - 2026-10-04: =SPC=, =S-SPC= and =DEL= scroll a screen in roll mode, as in plain mode; users who want a line can rebind them.  Done in the commit that adds this section.
 - 2026-10-04: upstream #345 is left for last.
+- 2026-10-04: the end state.  =pdf-view-mode= is the continuous view, drawn by the machinery of =pdf-roll.el=.  The single-page experience is a minor mode on top of it, =pdf-view-single-page-mode=; users who want it add it to =pdf-view-mode-hook=.  The plain-mode path is deleted.
+- 2026-10-04: =pdf-view-roll-minor-mode= is then either deleted or kept as an obsolete name that warns when used -- never one that silently does nothing.
 
 * Known issues to check
 
@@ -101,6 +103,6 @@ Inside =pdf-roll.el=, =pdf-roll--get-display-property= (=pdf-roll.el:607=) advis
 
 * Next steps
 
-2. Build the single-page view in pdf-roll: only the current page shows, the margins are hidden, the vscroll is clamped to the page, and an edge turns the page as the table above says.
-3. Make pdf-roll the default, the single-page view an option, and keep the old path behind a variable for a while.
+2. Build =pdf-view-single-page-mode= on top of today's =pdf-view-roll-minor-mode=: only the current page shows, the margins are hidden, the vscroll is clamped to the page, and scrolling past the bottom or the top turns the page as the tables above say.  A graphical check compares it with plain mode key by key.
+3. Make =pdf-view-mode= always draw with the machinery of =pdf-roll.el=; =pdf-view-roll-minor-mode= becomes obsolete, and the plain-mode path stays behind a variable for a while.
 4. Delete the plain-mode path and the 26 branches with it.
