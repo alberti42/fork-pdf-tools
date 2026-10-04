@@ -47,6 +47,9 @@
 (declare-function pdf-roll-display-image "pdf-roll")
 (declare-function pdf-roll-revert-buffer "pdf-roll")
 (declare-function pdf-roll-setup "pdf-roll")
+(declare-function pdf-roll-scroll-forward "pdf-roll")
+(declare-function pdf-roll-scroll-backward "pdf-roll")
+(defvar pdf-view-single-page-mode)
 (declare-function pdf-roll-scroll-screen-forward "pdf-roll")
 (declare-function pdf-roll-scroll-screen-backward "pdf-roll")
 
@@ -77,6 +80,14 @@ other value behaves like `fit-width'."
   "Fractional amount of resizing of one resize command."
   :group 'pdf-view
   :type 'number)
+
+(defcustom pdf-view-page-key-lines 5
+  "How many lines PageDown and PageUp scroll in the continuous view.
+If nil, they turn the page, as they do in `pdf-view-single-page-mode'.
+See `pdf-view-page-down'."
+  :type '(choice (const :tag "Turn the page" nil)
+                 (integer :tag "Lines"))
+  :group 'pdf-view)
 
 (define-obsolete-variable-alias 'pdf-view-continuous
   'pdf-view-turn-page-at-top-and-bottom "1.4.0")
@@ -361,8 +372,8 @@ regarding display of the region in the later function.")
     ;; Navigation in the document
     (define-key map (kbd "n")         'pdf-view-next-page-command)
     (define-key map (kbd "p")         'pdf-view-previous-page-command)
-    (define-key map (kbd "<next>")    'forward-page)
-    (define-key map (kbd "<prior>")   'backward-page)
+    (define-key map (kbd "<next>")    'pdf-view-page-down)
+    (define-key map (kbd "<prior>")   'pdf-view-page-up)
     (define-key map [remap forward-page]  'pdf-view-next-page-command)
     (define-key map [remap backward-page] 'pdf-view-previous-page-command)
     (define-key map (kbd "SPC")       'pdf-roll-scroll-screen-forward)
@@ -879,6 +890,24 @@ Optional parameter N moves N pages forward."
 Optional parameter N moves N pages backward."
   (interactive "p")
   (pdf-view-next-page (- (or n 1))))
+
+(defun pdf-view-page-down (&optional n)
+  "Scroll down `pdf-view-page-key-lines' lines, N times.
+In `pdf-view-single-page-mode', or if that option is nil, go to the
+next page instead, as `pdf-view-next-page-command' does."
+  (interactive "p")
+  (if (or pdf-view-single-page-mode (null pdf-view-page-key-lines))
+      (pdf-view-next-page-command n)
+    (pdf-roll-scroll-forward (* (or n 1) pdf-view-page-key-lines))))
+
+(defun pdf-view-page-up (&optional n)
+  "Scroll up `pdf-view-page-key-lines' lines, N times.
+In `pdf-view-single-page-mode', or if that option is nil, go to the
+previous page instead, as `pdf-view-previous-page-command' does."
+  (interactive "p")
+  (if (or pdf-view-single-page-mode (null pdf-view-page-key-lines))
+      (pdf-view-previous-page-command n)
+    (pdf-roll-scroll-backward (* (or n 1) pdf-view-page-key-lines))))
 
 (defun pdf-view-next-page-command (&optional n)
   "View the next page in the PDF.
