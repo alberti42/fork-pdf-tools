@@ -83,6 +83,16 @@
   (should (lookup-key pdf-view-roll-minor-mode-map
                       [remap pdf-view-next-line-or-next-page])))
 
+(ert-deftest pdf-roll-space-scrolls-a-screen ()
+  "SPC, S-SPC and DEL scroll a screen in roll mode, as they do outside it."
+  (with-temp-buffer
+    (use-local-map pdf-view-mode-map)
+    (let ((pdf-view-roll-minor-mode t))
+      (should (eq 'pdf-roll-scroll-screen-forward (key-binding (kbd "SPC"))))
+      (should (eq 'pdf-roll-scroll-screen-backward (key-binding (kbd "S-SPC"))))
+      (should (eq 'pdf-roll-scroll-screen-backward (key-binding (kbd "DEL"))))
+      (should (eq 'pdf-roll-scroll-forward (key-binding (kbd "C-n")))))))
+
 ;;; Overlay lookup tests
 
 (defun pdf-roll-test--fake-region-overlay (start end window)
