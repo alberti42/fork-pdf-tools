@@ -493,6 +493,72 @@ If PIXELS is non-nil N is number of pixels instead of lines."
    (- (* (window-text-height nil t) arg) (* next-screen-context-lines (frame-char-height)))
    nil t))
 
+;;; Wheel
+
+(defvar-local pdf-roll--wheel-remainder 0
+  "Pixels of wheel motion not scrolled yet, positive downward.
+See `pdf-roll-wheel-scroll'.")
+
+(defun pdf-roll--wheel-pixels (event)
+  "Return how many pixels EVENT asks to scroll, positive downward.
+A trackpad reports a pixel delta; a mouse wheel, only a count of lines."
+  (let ((down (eq (event-basic-type event) 'wheel-down))
+        (delta (cdr-safe (nth 4 event)))
+        (lines (or (nth 3 event) 1)))
+    (* (if down 1 -1)
+       (if (numberp delta)
+           (abs delta)
+         (* (max 1 lines) (frame-char-height))))))
+
+(defun pdf-roll-wheel-scroll (event)
+  "Scroll the window under the wheel EVENT.
+
+With `pixel-scroll-precision-mode', scroll by the pixels EVENT reports,
+so that a trackpad scrolls smoothly, the momentum macOS sends after a
+flick included.  Without it, scroll by whole lines: the pixels of
+successive events of one gesture add up, and the page moves each time
+they make a line, so that a gentle gesture, which macOS reports as no
+line at all, still scrolls.  In `pdf-view-single-page-mode' the page turns at its
+bottom and top as `pdf-view-turn-page-at-top-and-bottom' says."
+  (interactive "e")
+  (let ((window (posn-window (event-start event))))
+    (with-selected-window (if (windowp window) window (selected-window))
+      (let* ((pixels (pdf-roll--wheel-pixels event))
+             (step
+              (if (bound-and-true-p pixel-scroll-precision-mode)
+                  (round pixels)
+                (let ((line (frame-char-height)))
+                  ;; A new gesture, or a change of direction, starts the
+                  ;; count anew.
+                  (unless (and (eq last-command 'pdf-roll-wheel-scroll)
+                               (>= (* pixels pdf-roll--wheel-remainder) 0))
+                    (setq pdf-roll--wheel-remainder 0))
+                  (cl-incf pdf-roll--wheel-remainder pixels)
+                  (let ((whole (* line (truncate pdf-roll--wheel-remainder line))))
+                    (cl-decf pdf-roll--wheel-remainder whole)
+                    whole)))))
+        (cond ((zerop step))
+              (pdf-view-single-page-mode
+               (pdf-view-single-page--scroll step pdf-view-turn-page-at-top-and-bottom))
+              ((> step 0) (pdf-roll-scroll-forward step nil t))
+              (t (pdf-roll-scroll-backward (- step) nil t)))))))
+
+(defvar pdf-roll--wheel-keymap
+  (let ((map (make-sparse-keymap)))
+    (define-key map [wheel-up] #'pdf-roll-wheel-scroll)
+    (define-key map [wheel-down] #'pdf-roll-wheel-scroll)
+    map)
+  "The wheel bindings of PDF buffers.
+`pdf-roll-setup' puts them in `minor-mode-overriding-map-alist', which
+outranks the keymaps of minor modes: `pixel-scroll-precision-mode' binds
+the wheel in its own.")
+
+(defvar pdf-roll--wheel-keymap-active t
+  "Always non-nil; it keys `pdf-roll--wheel-keymap'.
+An entry in `minor-mode-overriding-map-alist' replaces the whole keymap
+of the mode it names, so the entry names this variable instead of
+`pixel-scroll-precision-mode', whose other bindings stay.")
+
 ;;; Minor mode
 (defun pdf-roll--forget-displayed-pages ()
   "Forget which pages each window on this buffer has displayed.
@@ -582,6 +648,9 @@ the revert function, so they are run here."
   (add-hook 'pre-redisplay-functions 'pdf-roll-pre-redisplay nil t)
   (add-hook 'pdf-roll-after-change-page-hook 'pdf-history-before-change-page-hook nil t)
   (make-local-variable 'pdf-roll--state)
+  (setq-local minor-mode-overriding-map-alist
+              (cons (cons 'pdf-roll--wheel-keymap-active pdf-roll--wheel-keymap)
+                    minor-mode-overriding-map-alist))
   (when (local-variable-p 'pixel-scroll-precision-mode)
     (kill-local-variable 'pixel-scroll-precision-mode)
     (kill-local-variable 'mwheel-coalesce-scroll-events))
