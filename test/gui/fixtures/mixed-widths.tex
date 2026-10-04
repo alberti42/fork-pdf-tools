@@ -1,0 +1,11 @@
+% 250 pages, page N being 300 + N big points wide, so that every page
+% has a size of its own.
+\documentclass{article}
+\begin{document}
+\count1=0
+\loop\advance\count1 by 1
+\pdfpagewidth=\dimexpr 300bp+\count1 bp\relax
+Page \the\count1
+\newpage
+\ifnum\count1<250\repeat
+\end{document}

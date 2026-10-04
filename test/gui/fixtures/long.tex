@@ -1,0 +1,9 @@
+% 2000 A4 pages.
+\documentclass[a4paper]{article}
+\begin{document}
+\count1=0
+\loop\advance\count1 by 1
+Page \the\count1
+\newpage
+\ifnum\count1<2000\repeat
+\end{document}

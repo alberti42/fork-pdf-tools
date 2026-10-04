@@ -1,0 +1,53 @@
+#+TITLE: Checks that need a window system
+
+The ert tests in =test/= run in batch, where Emacs cannot measure an image and redisplay does not really run.  The checks here cover what that leaves out: the size at which a page is shown, what a window shows between a change and the render that follows it, and documents built for the purpose.
+
+* Running them
+
+#+begin_src sh
+test/gui/run.sh                    # all checks
+test/gui/run.sh check-revert.el    # some of them
+#+end_src
+
+Each check prints =PASS= or =FAIL= with its name, and writes a report with the details and the =*Messages*= buffer.  The script exits with a status other than 0 if any check failed.
+
+| Variable                | Meaning                                          | Default                           |
+|-------------------------+--------------------------------------------------+-----------------------------------|
+| =EMACS=                 | the Emacs to run; it must open a graphical frame | =emacs=                           |
+| =PDF_TOOLS_TABLIST_DIR= | the directory of =tablist=, if Emacs -Q does not find it | none                       |
+| =GUI_CHECK_OUT=         | where reports and built documents go             | =$TMPDIR/pdf-tools-gui-checks=    |
+| =GUI_CHECK_TIMEOUT=     | seconds after which a check is stopped and fails | 300                               |
+
+The checks load pdf-tools from this working tree and use the epdfinfo built in =server/=.  The documents other than =test/test.pdf= are built with =pdflatex= from =fixtures/=, once, into =GUI_CHECK_OUT=.
+
+A graphical frame opens for each check and closes when it ends.
+
+* The checks
+
+| Check                    | Frame | What passes                                                                                                          |
+|--------------------------+-------+----------------------------------------------------------------------------------------------------------------------|
+| =check-geometry=         | yes   | =pdf-view-displayed-page-size= equals =image-display-size= for 2880 combinations of page, slice, rotation, width cap, display size, relief and image cache |
+| =check-scroll-trace=     | yes   | 84 steps of scrolling, fit-page, slice and rotation in roll mode give the same trace with and without =pdf-view-render-asynchronously=, and no synchronous query from =pdf-roll-pre-redisplay= with it |
+| =check-revert=           | yes   | after =revert-buffer= the pages drawn before stay, stale, through the first redisplay, then show their new render; a revert to another number of pages makes the overlays anew |
+| =check-reshape=          | yes   | after a rotation, a zoom, a slice or a revert, a page that had an image shows one of the size it is to have on the first redisplay |
+| =check-isearch-wrap=     | yes   | isearch wrapping forward and backward lands on the same page and vscroll in roll mode as in plain mode |
+| =check-mode-line=        | yes   | the size indication in the mode line never draws a page                                                              |
+| =check-page-sizes=       | no    | each of 250 pages of different widths gets its own size from =pdf-cache-read-pagesizes=                              |
+| =check-long-document=    | no    | a document of 2000 pages opens with every page size cached; reports how long that takes                             |
+| =check-nested-query=     | no    | a synchronous query made from inside the handler of an asynchronous reply returns what it returns outside           |
+
+The checks marked "no" run in batch.
+
+* The ert tests without Cask
+
+=dev/run-tests.el= runs ert test files against the working tree, without Cask and the package tar the Makefile uses:
+
+#+begin_src sh
+emacs -Q -batch -l dev/run-tests.el test/pdf-view-test.el test/pdf-roll-test.el
+#+end_src
+
+Load =dev/no-png.el= first to run them as on the Emacs builds of CI, which have no PNG support:
+
+#+begin_src sh
+emacs -Q -batch -l dev/no-png.el -l dev/run-tests.el test/pdf-view-test.el
+#+end_src

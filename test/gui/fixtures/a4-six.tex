@@ -1,0 +1,10 @@
+% Six A4 pages: as many as test/test.pdf, at another page size, for a
+% revert that keeps the number of pages and changes their size.
+\documentclass[a4paper]{article}
+\begin{document}
+\count1=0
+\loop\advance\count1 by 1
+A4 page \the\count1
+\newpage
+\ifnum\count1<6\repeat
+\end{document}
