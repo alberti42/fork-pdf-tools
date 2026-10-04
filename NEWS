@@ -18,6 +18,9 @@
 - The size of every page is read when the document is opened and reverted, so a page takes its room in the window before it is drawn.
 
 ** Functionality improvements and fixes
+- The mouse wheel and the trackpad scroll by what they report, with ~pdf-roll-wheel-scroll~
+  + Without ~pixel-scroll-precision-mode~, the pixels of a gesture add up and the page moves by whole lines; a gentle trackpad gesture, which macOS reports as no line at all, used to do nothing.
+  + With it, each event scrolls its pixels exactly, the momentum after a flick included; scrolling up across a page used to jump to the top of the document.
 - ~SPC~, ~S-SPC~ and ~DEL~ scroll a screen in the continuous view; in 1.3.0 roll mode they scrolled one line.
 - Isearch no longer signals "Invalid image specification" when it wraps backward.
 - A page whose width is capped by ~pdf-view-max-image-width~ keeps its proportions.
