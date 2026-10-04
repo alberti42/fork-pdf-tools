@@ -551,8 +551,10 @@ the revert function, so they are run here."
   :keymap (let ((map (make-sparse-keymap)))
             (define-key map [remap pdf-view-previous-line-or-previous-page] 'pdf-roll-scroll-backward)
             (define-key map [remap pdf-view-next-line-or-next-page] 'pdf-roll-scroll-forward)
-            (define-key map [remap pdf-view-scroll-down-or-previous-page] 'pdf-roll-scroll-backward)
-            (define-key map [remap pdf-view-scroll-up-or-next-page] 'pdf-roll-scroll-forward)
+            ;; SPC, S-SPC, DEL, C-v and M-v scroll a screen, as they do
+            ;; outside roll mode.
+            (define-key map [remap pdf-view-scroll-down-or-previous-page] 'pdf-roll-scroll-screen-backward)
+            (define-key map [remap pdf-view-scroll-up-or-next-page] 'pdf-roll-scroll-screen-forward)
             (define-key map [remap mouse-set-point] 'ignore)
             (define-key map (kbd "S-<next>") 'pdf-roll-scroll-screen-forward)
             (define-key map (kbd "S-<prior>") 'pdf-roll-scroll-screen-backward)

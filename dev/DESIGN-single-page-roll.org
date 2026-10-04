@@ -35,7 +35,7 @@ What the single-page view must do, taken from =pdf-view-mode-map= (=pdf-view.el=
 | =n=, =p=, =<next>=, =<prior>= | next or previous page, at its top | same |
 | =M-<=, =M->= | first, last page | same |
 | =M-g g= (=goto-line=), =M-g l= | go to page, to label | same |
-| =SPC=, =S-SPC=, =DEL= | scroll a screen; at the page's edge turn the page, landing at the top (forward) or the bottom (backward) | remapped to =pdf-roll-scroll-forward=/=-backward=, which without an argument scroll *one line* |
+| =SPC=, =S-SPC=, =DEL= | scroll a screen; at the page's edge turn the page, landing at the top (forward) or the bottom (backward) | scroll a screen across pages (one line before the decision below) |
 | =C-n=, =C-p=, =<down>=, =<up>= | scroll a line; at the edge turn the page if =pdf-view-continuous= | scroll a line across pages |
 | =RET= | =image-next-line=: a line down, no page turn | =image-next-line= on the current page ? |
 | Mouse wheel | =pdf-view-scroll-up-or-next-page= with a line count: turns the page at the edge if =pdf-view-continuous= | =pdf-roll-scroll-forward= across pages |
@@ -89,11 +89,15 @@ What the single-page view must do, taken from =pdf-view-mode-map= (=pdf-view.el=
 
 Inside =pdf-roll.el=, =pdf-roll--get-display-property= (=pdf-roll.el:607=) advises =image-get-display-property= to return the current page's display, which is what lets image-mode functions such as =image-scroll-up= work in roll mode.
 
+* Decisions
+
+- 2026-10-04: =SPC=, =S-SPC= and =DEL= scroll a screen in roll mode, as in plain mode; users who want a line can rebind them.  Done in the commit that adds this section.
+- 2026-10-04: upstream #345 is left for last.
+
 * Known issues to check
 
-- Upstream #345: pdf-roll clobbers other overlays that carry a =window= property, such as the region highlight.
-- =SPC= and =DEL= in roll mode scroll one line, not a screen.
 - The items marked "?" above.
+- Upstream #345, last: pdf-roll clobbers other overlays that carry a =window= property, such as the region highlight.
 
 * Next steps
 
