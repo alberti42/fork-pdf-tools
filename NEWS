@@ -1,4 +1,27 @@
 -*- org -*-
+* Version 1.4.0 (unreleased)
+** Rendering without waiting
+- Pages are rendered without waiting for the server in ~pdf-view-roll-minor-mode~
+  + A page not rendered yet shows a blank placeholder of its size, and the page replaces it when the server has rendered it.  Redisplay no longer waits for epdfinfo, so code run during redisplay -- the mode line, timers, other processes' sentinels such as AUCTeX's -- no longer runs in the middle of a render.
+  + On by default; set ~pdf-view-render-asynchronously~ to nil to wait for each page as before.
+- Reverting a document in roll mode keeps the pages on screen until their new renders arrive
+  + After a compilation the window no longer goes blank.  A page whose size changed shows its old image reshaped to the new size until then.
+  + Links, annotations and text selection do nothing on a page still showing the old document.
+- The size of every page is read when the document is opened and reverted, so a page takes its room in the window before it is drawn.
+
+** Functionality improvements and fixes
+- ~SPC~, ~S-SPC~ and ~DEL~ scroll a screen in roll mode, as they do outside it; they scrolled one line.
+- Isearch no longer signals "Invalid image specification" when it wraps backward in roll mode.
+- A page whose width is capped by ~pdf-view-max-image-width~ keeps its proportions.
+- A page is shown at the same height whichever cached image it is drawn from.
+
+** Changes to options
+- ~pdf-view-continuous~ is renamed ~pdf-view-turn-page-at-top-and-bottom~, which says what it does: scrolling past the bottom or the top of a page turns the page.  The old name is an obsolete alias.
+- New option ~pdf-view-render-asynchronously~, see above.
+
+** Requirements
+- Emacs 27.1 or later is required; 26.3 was released in August 2019.
+
 * Version 1.3.0
 ** New functionality to improve overall user experience
 - Add ~pdf-view-roll-minor-mode~ for continuous scrolling @dalanicolai @aikrahguzar #224
