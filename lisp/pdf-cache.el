@@ -84,12 +84,17 @@ an internal function and not meant to be directly used."
   "Clear the data cache when annotations are modified.
 
 FN is a closure as described in `pdf-annot-modified-functions'.
+The size of a page is kept: annotations do not change it, and redisplay
+needs it without asking the server (see `pdf-cache-read-pagesizes').
 
 Note: This is an internal function and not meant to be directly used."
-  (apply #'pdf-cache-clear-data-of-pages
-         (mapcar (lambda (a)
-                   (cdr (assq 'page a)))
-                 (funcall fn t))))
+  (when pdf-cache--data
+    (dolist (a (funcall fn t))
+      (let* ((page (cdr (assq 'page a)))
+             (size (assq 'pagesize (gethash page pdf-cache--data))))
+        (if size
+            (puthash page (list size) pdf-cache--data)
+          (remhash page pdf-cache--data))))))
 
 (defun pdf-cache--data-put (key value &optional page)
   "Put KEY with VALUE in the cache of PAGE, return value."

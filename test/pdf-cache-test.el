@@ -28,3 +28,15 @@
                     (pdf-cache--make-image 1 1 "1" nil)
                     (pdf-cache--make-image 3 1 "3" nil))))
     (should-not (pdf-cache-get-image 4 1))))
+
+(ert-deftest pdf-cache-annotations-keep-the-page-size ()
+  "Changing an annotation clears what it may change, not the page size."
+  (with-temp-buffer
+    (pdf-cache--data-put 'pagesize '(612 . 792) 2)
+    (pdf-cache--data-put 'boundingbox '(0 0 1 1) 2)
+    (pdf-cache--data-put 'boundingbox '(0 0 1 1) 3)
+    (pdf-cache--clear-data-of-annotations
+     (lambda (&rest _) '(((page . 2)) ((page . 3)))))
+    (should (equal '(t 612 . 792) (pdf-cache--data-get 'pagesize 2)))
+    (should-not (car (pdf-cache--data-get 'boundingbox 2)))
+    (should-not (car (pdf-cache--data-get 'boundingbox 3)))))
