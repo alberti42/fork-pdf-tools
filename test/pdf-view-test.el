@@ -378,3 +378,28 @@ Emacs on CI lacks PNG support."
           (pdf-view-create-page 1)
           (should (equal 900 (plist-get props :width)))
           (should (equal 1165 (plist-get props :height))))))))
+
+(ert-deftest pdf-view-displayed-page-size-applies-relief-rotation-and-slice ()
+  "The displayed size follows the image through relief, rotation and slice.
+
+The sizes are those a graphical Emacs 32.0.50 displayed for the same
+settings; `image-display-size' cannot be called in batch."
+  (pdf-test-with-test-pdf
+    (pdf-view-mode)
+    (cl-letf (((symbol-function 'pdf-cache-pagesize) (lambda (_) '(600 . 800))))
+      (let ((pdf-view-display-size 1.0)
+            (pdf-view-max-image-width nil)
+            (pdf-view-image-relief 0)
+            (pdf-view--current-rotation 0))
+        (should (equal '(600 . 800) (pdf-view-displayed-page-size 1)))
+        (let ((pdf-view-image-relief 3))
+          (should (equal '(606 . 806) (pdf-view-displayed-page-size 1)))
+          (let ((pdf-view--current-rotation 90))
+            (should (equal '(806 . 606) (pdf-view-displayed-page-size 1)))
+            (setf (pdf-view-current-slice) '(0.1 0.2 0.5 0.6))
+            (unwind-protect
+                ;; 0.5 * 806 and 0.6 * 606 = 363.6
+                (should (equal '(403 . 364) (pdf-view-displayed-page-size 1)))
+              (setf (pdf-view-current-slice) nil))))
+        (let ((pdf-view--current-rotation 180))
+          (should (equal '(600 . 800) (pdf-view-displayed-page-size 1))))))))

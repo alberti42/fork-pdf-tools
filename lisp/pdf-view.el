@@ -1487,6 +1487,27 @@ If WINDOW is t, redisplay pages in all windows."
                                 (cdr pagesize))
                              0.5)))))))
 
+(defun pdf-view-displayed-page-size (&optional page window)
+  "Return the size in pixels, (WIDTH . HEIGHT), at which WINDOW shows PAGE.
+
+This is the size of the image `pdf-view-create-page' makes, after
+`pdf-view-image-relief', `pdf-view--current-rotation' and the slice of
+WINDOW are applied, as `pdf-roll-display-image' displays it.  It is
+computed from the size of the page and draws nothing, so it is known
+before the image is.  Only rotations by multiples of 90 degrees are
+taken into account."
+  (let* ((size (pdf-view-desired-image-size page window))
+         (relief (* 2 (abs (or pdf-view-image-relief 0))))
+         (width (+ (car size) relief))
+         (height (+ (cdr size) relief))
+         (slice (pdf-view-current-slice window)))
+    (when (memq (or pdf-view--current-rotation 0) '(90 270))
+      (cl-rotatef width height))
+    (if slice
+        (let ((edges (pdf-util-scale slice (cons width height) 'round)))
+          (cons (nth 2 edges) (nth 3 edges)))
+      (cons width height))))
+
 (defun pdf-view-text-regions-hotspots-function (page size)
   "Return a list of hotspots for text regions on PAGE using SIZE.
 
