@@ -1377,6 +1377,23 @@ not be asked anything synchronously, so drawing is left to a timer."
       (pdf-view-display-image (pdf-view-create-page page window) page window)
       (force-window-update window))))
 
+(defun pdf-view-page-stale-p (&optional window page)
+  "Return non-nil if WINDOW shows PAGE as it was in a document since closed.
+
+A revert closes the document and opens the file again, and a page keeps
+showing what it showed until it is drawn anew.  Its hotspots then belong
+to the old document, so a click on them must not act.  WINDOW defaults
+to the selected one and PAGE to the page it shows.  See
+`pdf-view--document-generation'."
+  (let* ((window (if (windowp window) window (selected-window)))
+         (overlay (if pdf-view-roll-minor-mode
+                      (pdf-roll-page-overlay
+                       (or page (pdf-view-current-page window)) window)
+                    (pdf-view-current-overlay window))))
+    (and overlay
+         (not (eq (overlay-get overlay 'pdf-view-generation)
+                  pdf-view--document-generation)))))
+
 (defun pdf-view-page-displayed-p (&optional window page)
   "Return non-nil if WINDOW already shows an image for PAGE.
 
@@ -1480,6 +1497,7 @@ It is equal to \(LEFT . TOP\) of the current slice in pixel."
                                      `(space :align-to
                                        ,(/ (- (window-width window)
                                               displayed-width) 2)))))
+          (overlay-put ol 'pdf-view-generation pdf-view--document-generation)
           (overlay-put ol 'display
                        (if slice
                            (list (cons 'slice
@@ -1842,9 +1860,9 @@ Deactivate the region if DEACTIVATE-P is non-nil."
     (deactivate-mark)
     (pdf-view-redisplay t)))
 
-(defun pdf-view-mouse-set-region (event &optional allow-extend-p
-                                        rectangle-p
-                                        selection-style)
+(cl-defun pdf-view-mouse-set-region (event &optional allow-extend-p
+                                           rectangle-p
+                                           selection-style)
   "Select a region of text using the mouse with mouse event EVENT.
 
 Allow for stacking of regions, if ALLOW-EXTEND-P is non-nil.
@@ -1854,12 +1872,18 @@ Create a rectangular region, if RECTANGLE-P is non-nil.
 Overwrite `pdf-view-selection-style' with SELECTION-STYLE,
 which is one of `glyph', `word', or `line'.
 
-Stores the region in `pdf-view-active-region'."
+Stores the region in `pdf-view-active-region'.  Nothing is selected on
+a page that still shows a document since closed, see
+`pdf-view-page-stale-p'."
   (interactive "@e")
   (setq pdf-view--have-rectangle-region rectangle-p)
   (unless (and (eventp event)
                (mouse-event-p event))
     (signal 'wrong-type-argument (list 'mouse-event-p event)))
+  (when (pdf-view-page-stale-p
+         nil (when pdf-view-roll-minor-mode
+               (/ (+ 3 (posn-point (event-start event))) 4)))
+    (cl-return-from pdf-view-mouse-set-region nil))
   (unless (and allow-extend-p
                (or (null (get this-command 'pdf-view-region-window))
                    (equal (get this-command 'pdf-view-region-window)

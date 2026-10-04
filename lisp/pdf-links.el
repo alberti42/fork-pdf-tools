@@ -152,7 +152,8 @@ links via \\[pdf-links-isearch-link].
          (vector id 'mouse-1)
          (lambda nil
            (interactive "@")
-           (pdf-links-action-perform l)))
+           (unless (pdf-view-page-stale-p nil page)
+             (pdf-links-action-perform l))))
         (local-set-key
          (vector id t)
          'pdf-util-image-map-mouse-event-proxy)))

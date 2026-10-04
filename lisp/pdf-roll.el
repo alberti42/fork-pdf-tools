@@ -146,6 +146,7 @@ height."
     ;; changed the buffer, so a redisplay follows that draws PAGE again; skip
     ;; it here rather than write to an overlay that is no longer there.
     (when overlay
+      (overlay-put overlay 'pdf-view-generation pdf-view--document-generation)
       (overlay-put overlay 'display display)
       (overlay-put overlay 'line-prefix offset))
     (when margin-overlay

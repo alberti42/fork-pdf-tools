@@ -969,25 +969,30 @@ SIZE is a cons (SX . SY), by which edges are scaled."
 ID is the identifier for the ANNOTATION, as returned
 `pdf-annot-get-id'. MOVEABLE-P indicates whether the annotation
 is moveable."
+  ;; Nothing acts on an annotation of a page that still shows a document
+  ;; since closed, see `pdf-view-page-stale-p'.
   ;; Activating
   (local-set-key
    (vector id 'mouse-1)
    (lambda ()
-     (interactive)
-     (pdf-annot-activate-annotation annotation)))
+     (interactive "@")
+     (unless (pdf-view-page-stale-p nil (pdf-annot-get annotation 'page))
+       (pdf-annot-activate-annotation annotation))))
   ;; Move
   (when moveable-p
     (local-set-key
      (vector id 'down-mouse-1)
      (lambda (ev)
        (interactive "@e")
-       (pdf-annot-mouse-move ev annotation))))
+       (unless (pdf-view-page-stale-p nil (pdf-annot-get annotation 'page))
+         (pdf-annot-mouse-move ev annotation)))))
   ;; Context Menu
   (local-set-key
    (vector id 'down-mouse-3)
    (lambda ()
      (interactive "@")
-     (popup-menu (pdf-annot-create-context-menu annotation))))
+     (unless (pdf-view-page-stale-p nil (pdf-annot-get annotation 'page))
+       (popup-menu (pdf-annot-create-context-menu annotation)))))
   ;; Everything else
   (local-set-key
    (vector id t)

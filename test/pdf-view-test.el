@@ -448,3 +448,30 @@ server."
         ;; A sliced page.
         (overlay-put overlay 'display '((slice 0 0 5 5) (image :type png :width 10 :height 400)))
         (should (pdf-view-page-displayed-p nil 1))))))
+
+(ert-deftest pdf-view-page-stale-p-after-the-document-is-closed ()
+  "A page drawn before the document was closed is stale until drawn again."
+  (with-temp-buffer
+    (insert " ")
+    (let ((overlay (make-overlay 1 2))
+          (pdf-view-roll-minor-mode t)
+          (pdf-view--document-generation 3))
+      (cl-letf (((symbol-function 'pdf-roll-page-overlay) (lambda (&rest _) overlay)))
+        (overlay-put overlay 'pdf-view-generation 3)
+        (should-not (pdf-view-page-stale-p nil 1))
+        (pdf-view--next-document-generation)
+        (should (pdf-view-page-stale-p nil 1))
+        (overlay-put overlay 'pdf-view-generation 4)
+        (should-not (pdf-view-page-stale-p nil 1))))))
+
+(ert-deftest pdf-view-no-selection-on-a-stale-page ()
+  "Dragging on a page of a document since closed selects nothing."
+  (let ((event `(down-mouse-1 (,(selected-window) 1 (10 . 10) 0)))
+        tracked)
+    (with-temp-buffer
+      (cl-letf (((symbol-function 'pdf-util-track-mouse-dragging)
+                 (lambda (&rest _) (setq tracked t) nil))
+                ((symbol-function 'pdf-view-deactivate-region) #'ignore)
+                ((symbol-function 'pdf-view-page-stale-p) (lambda (&rest _) t)))
+        (pdf-view-mouse-set-region event)
+        (should-not tracked)))))
