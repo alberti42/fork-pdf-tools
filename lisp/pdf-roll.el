@@ -51,6 +51,8 @@
 (defvar pdf-roll--state nil
   "Local variable that tracks window, point and vscroll to handle changes.")
 
+(defvar pdf-view-single-page-mode)
+
 (defvar pdf-roll--delay-revert nil
   "Non-nil while a page render is waiting on the epdfinfo process.
 `pdf-roll-initialize' postpones its work while this is set.")
@@ -214,7 +216,15 @@ on the image, so it does not depend on the image being there."
 
 (defun pdf-roll-display-pages (page &optional window force pscrolling)
   "Display pages to fill the WINDOW starting from PAGE.
-If FORCE is non-nill redisplay a page even if it is already displayed."
+If FORCE is non-nill redisplay a page even if it is already displayed.
+With `pdf-view-single-page-mode', display PAGE alone."
+  (if pdf-view-single-page-mode
+      (pdf-view-single-page--display page window force)
+    (pdf-roll--display-pages page window force pscrolling)))
+
+(defun pdf-roll--display-pages (page window force pscrolling)
+  "Display pages to fill the WINDOW starting from PAGE.
+FORCE and PSCROLLING are as in `pdf-roll-display-pages'."
   (let (displayed
         (available-height (window-pixel-height window)))
     (when (and pscrolling (> page 1))
@@ -322,6 +332,8 @@ It should be added to `pre-redisplay-functions' buffer locally."
            (page-changed (not (eq page (nth 0 state))))
            (vscroll-changed (not (eq vscroll (nth 3 state))))
            (start (pdf-roll-page-to-pos page)))
+      (when pdf-view-single-page-mode
+        (pdf-view-single-page--hide win page))
       (if (and pscrolling
                (or (not (eq start (- (point-max) 3)))
                    (let ((visible-pixels (nth 4 (pos-visible-in-window-p start win t))))
@@ -581,6 +593,8 @@ the revert function, so they are run here."
 
          (pdf-roll-initialize))
         (t
+         (when pdf-view-single-page-mode
+           (pdf-view-single-page-mode -1))
          (setq-local mwheel-scroll-up-function #'pdf-view-scroll-up-or-next-page)
          (setq-local mwheel-scroll-down-function #'pdf-view-scroll-down-or-previous-page)
 
@@ -602,6 +616,144 @@ the revert function, so they are run here."
            (pdf-roll--forget-displayed-pages)
            (pdf-view-new-window-function (list (selected-window)))
            (set-buffer-modified-p nil)))))
+
+;;; Single page
+
+(defvar-local pdf-view-single-page--overlays nil
+  "For each window, the overlays hiding what is before and after its page.
+An alist from window to (BEFORE . AFTER).")
+
+(defun pdf-view-single-page--hide (window page)
+  "Hide every page but PAGE, and every margin, in WINDOW."
+  (let ((pos (pdf-roll-page-to-pos page))
+        (pair (alist-get window pdf-view-single-page--overlays)))
+    (unless (and pair (overlay-buffer (car pair)) (overlay-buffer (cdr pair)))
+      (setq pair (cons (make-overlay 1 1) (make-overlay 1 1)))
+      (dolist (overlay (list (car pair) (cdr pair)))
+        (overlay-put overlay 'pdf-view-single-page t)
+        (overlay-put overlay 'window window)
+        (overlay-put overlay 'invisible t))
+      (setf (alist-get window pdf-view-single-page--overlays) pair))
+    (move-overlay (car pair) (point-min) pos)
+    (move-overlay (cdr pair) (min (1+ pos) (point-max)) (point-max))))
+
+(defun pdf-view-single-page--show-all ()
+  "Delete the overlays of `pdf-view-single-page--hide'."
+  (remove-overlays (point-min) (point-max) 'pdf-view-single-page t)
+  (setq pdf-view-single-page--overlays nil))
+
+(defun pdf-view-single-page--bottom (page window)
+  "Return the largest vscroll of WINDOW on PAGE: its bottom in view."
+  (max 0 (- (cdr (pdf-view-displayed-page-size page window))
+            (window-text-height window t))))
+
+(defun pdf-view-single-page--display (page window force)
+  "Display PAGE alone in WINDOW, its vscroll kept within the page.
+FORCE is as in `pdf-roll-display-pages'.  Return the list of the pages
+displayed."
+  (pdf-roll-display-page page window force)
+  (pdf-roll-set-vscroll (min (or (image-mode-window-get 'vscroll window) 0)
+                             (pdf-view-single-page--bottom page window))
+                        window)
+  (image-mode-window-put 'displayed-pages (list page) window)
+  (list page))
+
+(defun pdf-view-single-page--scroll (pixels turn)
+  "Scroll the selected window by PIXELS within its page, down if positive.
+If TURN is non-nil, scrolling down at the bottom of the page shows the
+next page from its top, and scrolling up at the top the previous page
+from its bottom, as outside roll mode.  At fit-height and fit-page,
+where the whole page is in view, any scroll turns the page."
+  (let* ((window (selected-window))
+         (page (pdf-view-current-page window))
+         (bottom (pdf-view-single-page--bottom page window))
+         (vscroll (min bottom (or (image-mode-window-get 'vscroll window) 0)))
+         (whole (memq pdf-view-display-size '(fit-height fit-page))))
+    (cond
+     ((> pixels 0)
+      (if (and turn (or whole (>= vscroll bottom)))
+          (if (< page (pdf-cache-number-of-pages))
+              (pdf-view-goto-page (1+ page) window)
+            (message "End of document"))
+        (pdf-roll-set-vscroll (min bottom (+ vscroll pixels)) window)))
+     ((< pixels 0)
+      (if (and turn (or whole (<= vscroll 0)))
+          (if (> page 1)
+              (progn
+                (pdf-view-goto-page (1- page) window)
+                (pdf-roll-set-vscroll
+                 (pdf-view-single-page--bottom (1- page) window) window))
+            (message "Beginning of document"))
+        (pdf-roll-set-vscroll (max 0 (+ vscroll pixels)) window))))))
+
+(defun pdf-view-single-page-scroll-up (&optional arg)
+  "Scroll a screen down the page, or ARG lines; turn the page at its bottom.
+Without ARG the page is turned at its bottom; with ARG only if
+`pdf-view-turn-page-at-top-and-bottom' is non-nil."
+  (interactive "P")
+  (pdf-view-single-page--scroll
+   (if arg
+       (* (prefix-numeric-value arg) (frame-char-height))
+     (- (window-text-height nil t)
+        (* next-screen-context-lines (frame-char-height))))
+   (or (null arg) pdf-view-turn-page-at-top-and-bottom)))
+
+(defun pdf-view-single-page-scroll-down (&optional arg)
+  "Scroll a screen up the page, or ARG lines; turn the page at its top.
+Without ARG the page is turned at its top; with ARG only if
+`pdf-view-turn-page-at-top-and-bottom' is non-nil."
+  (interactive "P")
+  (pdf-view-single-page--scroll
+   (- (if arg
+          (* (prefix-numeric-value arg) (frame-char-height))
+        (- (window-text-height nil t)
+           (* next-screen-context-lines (frame-char-height)))))
+   (or (null arg) pdf-view-turn-page-at-top-and-bottom)))
+
+(defun pdf-view-single-page-next-line (&optional arg)
+  "Scroll ARG lines down the page.
+At its bottom turn the page if `pdf-view-turn-page-at-top-and-bottom'."
+  (interactive "p")
+  (pdf-view-single-page--scroll (* (or arg 1) (frame-char-height))
+                                pdf-view-turn-page-at-top-and-bottom))
+
+(defun pdf-view-single-page-previous-line (&optional arg)
+  "Scroll ARG lines up the page.
+At its top turn the page if `pdf-view-turn-page-at-top-and-bottom'."
+  (interactive "p")
+  (pdf-view-single-page--scroll (- (* (or arg 1) (frame-char-height)))
+                                pdf-view-turn-page-at-top-and-bottom))
+
+;;;###autoload
+(define-minor-mode pdf-view-single-page-mode
+  "Show one page at a time, as `pdf-view-mode' did before continuous scrolling.
+
+Each window shows its current page alone.  Scrolling stays within the
+page; scrolling past its bottom or top turns the page as
+`pdf-view-turn-page-at-top-and-bottom' says, and SPC and DEL always
+turn it.  Turns on `pdf-view-roll-minor-mode', which draws the page."
+  :lighter " Page"
+  :keymap (let ((map (make-sparse-keymap)))
+            (define-key map [remap pdf-view-scroll-up-or-next-page] #'pdf-view-single-page-scroll-up)
+            (define-key map [remap pdf-view-scroll-down-or-previous-page] #'pdf-view-single-page-scroll-down)
+            (define-key map [remap pdf-view-next-line-or-next-page] #'pdf-view-single-page-next-line)
+            (define-key map [remap pdf-view-previous-line-or-previous-page] #'pdf-view-single-page-previous-line)
+            (define-key map [remap pdf-roll-scroll-screen-forward] #'pdf-view-single-page-scroll-up)
+            (define-key map [remap pdf-roll-scroll-screen-backward] #'pdf-view-single-page-scroll-down)
+            map)
+  (cond
+   (pdf-view-single-page-mode
+    (unless pdf-view-roll-minor-mode
+      (pdf-view-roll-minor-mode 1))
+    (setq-local mwheel-scroll-up-function #'pdf-view-single-page-scroll-up)
+    (setq-local mwheel-scroll-down-function #'pdf-view-single-page-scroll-down))
+   (t
+    (pdf-view-single-page--show-all)
+    (when pdf-view-roll-minor-mode
+      (setq-local mwheel-scroll-up-function #'pdf-roll-scroll-forward)
+      (setq-local mwheel-scroll-down-function #'pdf-roll-scroll-backward))))
+  (when pdf-view-roll-minor-mode
+    (pdf-roll-redisplay t)))
 
 (defun pdf-roll--get-display-property ()
   "`:before-until' advice for `image-get-display-property'.

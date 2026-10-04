@@ -481,3 +481,56 @@ An image of another size would move the window off the layout."
       (should (equal 6 (pdf-view-current-page window)))
       (should (equal (- 5000 (window-text-height window t))
                      (image-mode-window-get 'vscroll window))))))
+
+(defmacro pdf-roll-test-with-single-page (&rest body)
+  "Run BODY in test.pdf in `pdf-view-single-page-mode', pages 1000 pixels high."
+  (declare (indent 0) (debug t))
+  `(pdf-roll-test-with-async-render
+     (cl-letf (((symbol-function 'pdf-view-displayed-page-size)
+                (lambda (&rest _) '(10 . 1000))))
+       (setq-local pdf-view-single-page-mode t)
+       (pdf-view-goto-page 2 window)
+       ,@body)))
+
+(defun pdf-roll-test-bottom (window)
+  "The vscroll of WINDOW with the bottom of a 1000 pixel page in view."
+  (- 1000 (window-text-height window t)))
+
+(ert-deftest pdf-view-single-page-hides-the-other-pages ()
+  "Only the current page of the window is visible."
+  (pdf-roll-test-with-single-page
+    (pdf-roll-pre-redisplay window)
+    (let ((pos (pdf-roll-page-to-pos 2)))
+      (should (invisible-p (1- pos)))
+      (should-not (invisible-p pos))
+      (should (invisible-p (1+ pos)))
+      (should (equal '(2) (image-mode-window-get 'displayed-pages window))))))
+
+(ert-deftest pdf-view-single-page-line-scrolling-turns-at-the-bottom ()
+  "C-n scrolls within the page, and at its bottom turns the page."
+  (pdf-roll-test-with-single-page
+    (let ((pdf-view-turn-page-at-top-and-bottom t))
+      (pdf-view-single-page--scroll 5000 pdf-view-turn-page-at-top-and-bottom)
+      (should (equal 2 (pdf-view-current-page window)))
+      (should (equal (pdf-roll-test-bottom window) (image-mode-window-get 'vscroll window)))
+      (pdf-view-single-page-next-line)
+      (should (equal 3 (pdf-view-current-page window)))
+      (should (equal 0 (image-mode-window-get 'vscroll window))))))
+
+(ert-deftest pdf-view-single-page-line-scrolling-stops-at-the-bottom ()
+  "With `pdf-view-turn-page-at-top-and-bottom' nil, C-n stops at the bottom."
+  (pdf-roll-test-with-single-page
+    (let ((pdf-view-turn-page-at-top-and-bottom nil))
+      (dotimes (_ 3) (pdf-view-single-page-next-line 2000))
+      (should (equal 2 (pdf-view-current-page window)))
+      (should (equal (pdf-roll-test-bottom window) (image-mode-window-get 'vscroll window)))
+      ;; SPC still turns the page.
+      (pdf-view-single-page-scroll-up)
+      (should (equal 3 (pdf-view-current-page window))))))
+
+(ert-deftest pdf-view-single-page-scrolling-up-turns-to-the-bottom ()
+  "At the top of the page, DEL shows the previous page from its bottom."
+  (pdf-roll-test-with-single-page
+    (pdf-view-single-page-scroll-down)
+    (should (equal 1 (pdf-view-current-page window)))
+    (should (equal (pdf-roll-test-bottom window) (image-mode-window-get 'vscroll window)))))
