@@ -296,3 +296,31 @@ and redisplay would then scroll the window to page 1."
 (provide 'pdf-roll-test)
 
 ;;; pdf-roll-test.el ends here
+
+(ert-deftest pdf-roll-display-page-height-does-not-come-from-the-image ()
+  "The height a page takes is computed, not measured on its image.
+
+The image functions are replaced before the buffer is shown, because
+showing it draws the first page, and an image cannot be measured in
+batch."
+  (pdf-test-with-test-pdf
+    (let ((window (selected-window))
+          drawn)
+      (cl-letf (((symbol-function 'pdf-view-displayed-page-size)
+                 (lambda (&rest _) '(500 . 700)))
+                ((symbol-function 'pdf-view-create-page)
+                 (lambda (&rest _) (setq drawn t) '(image :type png)))
+                ((symbol-function 'image-display-size)
+                 (lambda (&rest _) '(10 . 20)))
+                ((symbol-function 'image-size)
+                 (lambda (&rest _) '(10 . 20))))
+        (set-window-buffer window (current-buffer))
+        (pdf-view-mode)
+        (pdf-roll-new-window-function window)
+        (setq drawn nil)
+        (should (equal 700 (pdf-roll-display-page 1 window)))
+        (should drawn)
+        (setq drawn nil)
+        ;; Already displayed: nothing is drawn, the height is the same.
+        (should (equal 700 (pdf-roll-display-page 1 window)))
+        (should-not drawn)))))
