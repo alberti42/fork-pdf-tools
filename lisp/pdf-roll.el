@@ -130,6 +130,31 @@ It stands for the page until `pdf-view-request-page' has it drawn."
                        `(space :width (,(car size)) :height (,(cdr size)))
                        size)))
 
+(defun pdf-roll-reshape-image (display page window)
+  "Show the image of DISPLAY on PAGE in WINDOW at the size the page is to have.
+
+DISPLAY is what the page shows, the image or a slice of it.  The image
+data is given the width, height, rotation and slice the page has now;
+Emacs rotates, slices and scales it.  A rotation, and a slice at the
+same width, come out as the page will be drawn; a zoom comes out scaled,
+and a page whose size changed in a revert stretched, until the page is
+drawn anew.  The image has no map: its hotspots were computed for the
+old geometry.  Without image data, the page shows a placeholder."
+  (let ((data (image-property (if (eq (car-safe display) 'image)
+                                  display
+                                (assq 'image display))
+                              :data))
+        (size (pdf-view-desired-image-size page window)))
+    (if data
+        (pdf-roll-display-image
+         (pdf-view-create-image data
+           :width (car size)
+           :height (cdr size)
+           :rotation (or pdf-view--current-rotation 0)
+           :pointer 'arrow)
+         page window)
+      (pdf-roll-display-placeholder page window))))
+
 (defun pdf-roll--display (page window display size)
   "Put DISPLAY, of SIZE in pixels, on the overlay of PAGE in WINDOW.
 Center it, and give the margin below it the same width.  Return the
@@ -171,15 +196,17 @@ on the image, so it does not depend on the image being there."
     (when (or force (not display) (eq (car display) 'space))
       (if pdf-view-render-asynchronously
           (progn
-            ;; A page that shows an image of the size it is to have keeps
-            ;; it until the new one comes, after a revert for instance.
-            ;; FORCE says that image is out of date, whatever it was drawn
-            ;; for.  An image of another size would put the window
-            ;; somewhere the layout does not expect, so it is replaced.
-            (if (and (pdf-view-page-displayed-p window page)
-                     (equal (image-display-size display t)
-                            (pdf-view-displayed-page-size page window)))
-                (when force (overlay-put overlay 'pdf-view-width nil))
+            ;; A page that shows an image keeps it until the new one comes,
+            ;; and FORCE says it is out of date, whatever it was drawn for.
+            ;; An image of another size would put the window somewhere the
+            ;; layout does not expect, so it is shown at the size the page
+            ;; is to have, as `pdf-roll-reshape-image' makes it.
+            (if (pdf-view-page-displayed-p window page)
+                (progn
+                  (unless (equal (image-display-size display t)
+                                 (pdf-view-displayed-page-size page window))
+                    (pdf-roll-reshape-image display page window))
+                  (when force (overlay-put overlay 'pdf-view-width nil)))
               (pdf-roll-display-placeholder page window))
             (pdf-view-request-page page window))
         (pdf-roll-display-image (pdf-view-create-page page window) page window)))

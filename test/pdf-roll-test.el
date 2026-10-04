@@ -341,13 +341,20 @@ a CALLBACK.  Timers run at once.  Images and pages measure 10x20."
                   (lambda (page _width &rest _)
                     (push (cons page pdf-info-asynchronous) requests)))
                  ((symbol-function 'pdf-view-create-page)
-                  (lambda (page &rest _) (push page drawn) '(image :type png)))
+                  (lambda (page &rest _)
+                    (push page drawn)
+                    '(image :type png :data "old png" :map (hotspots))))
                  ((symbol-function 'image-display-size)
                   (lambda (&rest _) '(10 . 20)))
                  ((symbol-function 'image-size)
                   (lambda (&rest _) '(10 . 20)))
                  ((symbol-function 'pdf-view-displayed-page-size)
                   (lambda (&rest _) '(10 . 20)))
+                 ;; Emacs on CI has no PNG support.
+                 ((symbol-function 'pdf-view-image-type) (lambda () 'png))
+                 ((symbol-function 'create-image)
+                  (lambda (data type _data-p &rest props)
+                    `(image :type ,type :data ,data ,@props)))
                  ((symbol-function 'run-at-time)
                   (lambda (_time _repeat fn &rest args) (apply fn args))))
          (set-window-buffer window (current-buffer))
@@ -430,16 +437,24 @@ The pages are stale until their new renders arrive."
         (should (equal (1- (* 4 7)) (buffer-size)))
         (should-not (eq overlay (pdf-roll-page-overlay 1 window)))))))
 
-(ert-deftest pdf-roll-async-render-replaces-an-image-of-another-size ()
-  "A page whose image no longer has its size shows a placeholder meanwhile.
+(ert-deftest pdf-roll-async-render-reshapes-an-image-of-another-size ()
+  "A page whose image no longer has its size shows it reshaped meanwhile.
 An image of another size would move the window off the layout."
   (pdf-roll-test-with-async-render
     (pdf-roll-display-page 2 window)
     (funcall (cdar requests) nil "png data")
     ;; Otherwise the page is drawn again at once, from the cache.
     (pdf-cache-clear-images)
-    (cl-letf (((symbol-function 'pdf-view-displayed-page-size)
-               (lambda (&rest _) '(20 . 10))))
-      (pdf-roll-display-page 2 window t)
-      (should (equal '(space :width (20) :height (10))
-                     (overlay-get (pdf-roll-page-overlay 2 window) 'display))))))
+    (let ((pdf-view--current-rotation 90)
+          (size (pdf-view-desired-image-size 2 window)))
+      (cl-letf (((symbol-function 'pdf-view-displayed-page-size)
+                 (lambda (&rest _) '(20 . 10))))
+        (pdf-roll-display-page 2 window t)
+        (let ((image (overlay-get (pdf-roll-page-overlay 2 window) 'display)))
+          (should (equal "old png" (image-property image :data)))
+          (should (equal (car size) (image-property image :width)))
+          (should (equal (cdr size) (image-property image :height)))
+          (should (equal 90 (image-property image :rotation)))
+          (should-not (image-property image :map)))
+        ;; It is still drawn anew.
+        (should (equal '(2 2) (mapcar #'car requests)))))))
