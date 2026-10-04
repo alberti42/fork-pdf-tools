@@ -305,6 +305,8 @@ showing it draws the first page, and an image cannot be measured in
 batch."
   (pdf-test-with-test-pdf
     (let ((window (selected-window))
+          ;; The page is drawn while waiting.
+          (pdf-view-render-asynchronously nil)
           drawn)
       (cl-letf (((symbol-function 'pdf-view-displayed-page-size)
                  (lambda (&rest _) '(500 . 700)))
@@ -324,3 +326,70 @@ batch."
         ;; Already displayed: nothing is drawn, the height is the same.
         (should (equal 700 (pdf-roll-display-page 1 window)))
         (should-not drawn)))))
+
+(defmacro pdf-roll-test-with-async-render (&rest body)
+  "Run BODY in test.pdf with pages rendered asynchronously.
+`requests' is the list of (PAGE . CALLBACK) sent to the server, newest
+first, and `drawn' the pages drawn.  The server answers when BODY calls
+a CALLBACK.  Timers run at once."
+  (declare (indent 0) (debug t))
+  `(pdf-test-with-test-pdf
+     (let ((window (selected-window))
+           (pdf-view-render-asynchronously t)
+           requests drawn)
+       (cl-letf (((symbol-function 'pdf-info-renderpage)
+                  (lambda (page _width &rest _)
+                    (push (cons page pdf-info-asynchronous) requests)))
+                 ((symbol-function 'pdf-view-create-page)
+                  (lambda (page &rest _) (push page drawn) '(image :type png)))
+                 ((symbol-function 'image-display-size)
+                  (lambda (&rest _) '(10 . 20)))
+                 ((symbol-function 'image-size)
+                  (lambda (&rest _) '(10 . 20)))
+                 ((symbol-function 'run-at-time)
+                  (lambda (_time _repeat fn &rest args) (apply fn args))))
+         (set-window-buffer window (current-buffer))
+         (pdf-view-mode)
+         (pdf-roll-new-window-function window)
+         (setq-local pdf-view-roll-minor-mode t)
+         (pdf-cache-clear-images)
+         (setq drawn nil)
+         ,@body))))
+
+(ert-deftest pdf-roll-async-render-draws-a-placeholder-then-the-page ()
+  "Displaying a page asks for it once and draws it when the reply comes."
+  (pdf-roll-test-with-async-render
+    (let ((size (pdf-view-displayed-page-size 2 window)))
+      (should (equal (cdr size) (pdf-roll-display-page 2 window)))
+      (should (equal `(space :width (,(car size)) :height (,(cdr size)))
+                     (overlay-get (pdf-roll-page-overlay 2 window) 'display)))
+      (should (equal '(2) (mapcar #'car requests)))
+      (should-not drawn)
+      ;; A second redisplay before the reply asks nothing more.
+      (pdf-roll-display-page 2 window)
+      (should (equal '(2) (mapcar #'car requests)))
+      (funcall (cdar requests) nil "png data")
+      (should (equal '(2) drawn))
+      (should (pdf-view-page-displayed-p window 2)))))
+
+(ert-deftest pdf-roll-async-render-drops-a-reply-from-before-a-revert ()
+  "A reply for a document closed since is not drawn, nor cached."
+  (pdf-roll-test-with-async-render
+    (pdf-roll-display-page 2 window)
+    (run-hooks 'pdf-info-close-document-hook)
+    (funcall (cdar requests) nil "png data")
+    (should-not drawn)
+    (should-not (pdf-cache-lookup-image 2 1))))
+
+(ert-deftest pdf-roll-async-render-sends-one-at-a-time ()
+  "A page undisplayed before its request is sent is never asked for."
+  (pdf-roll-test-with-async-render
+    (pdf-roll-display-page 2 window)
+    (pdf-roll-display-page 3 window)
+    (pdf-roll-display-page 4 window)
+    (should (equal '(2) (mapcar #'car requests)))
+    (pdf-roll-undisplay-pages '(3) window)
+    (funcall (cdar requests) nil "png data")
+    (should (equal '(4 2) (mapcar #'car requests)))
+    (funcall (cdar requests) nil "png data")
+    (should (equal '(4 2) drawn))))

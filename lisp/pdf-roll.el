@@ -119,9 +119,22 @@ If INHIBIT-SLICE-P is non-nil, disregard `pdf-view-current-slice'."
 (defun pdf-roll-display-image (image page &optional window inhibit-slice-p)
   "Display IMAGE for PAGE in WINDOW.
 If INHIBIT-SLICE-P is non-nil, disregard `pdf-view-current-slice'."
-  (let* ((image (pdf-roll-maybe-slice-image image window inhibit-slice-p))
-         (size (image-display-size image t))
-         (overlay (pdf-roll-page-overlay page window))
+  (let ((image (pdf-roll-maybe-slice-image image window inhibit-slice-p)))
+    (pdf-roll--display page window image (image-display-size image t))))
+
+(defun pdf-roll-display-placeholder (page window)
+  "Display a blank placeholder of the size of PAGE in WINDOW.
+It stands for the page until `pdf-view-request-page' has it drawn."
+  (let ((size (pdf-view-displayed-page-size page window)))
+    (pdf-roll--display page window
+                       `(space :width (,(car size)) :height (,(cdr size)))
+                       size)))
+
+(defun pdf-roll--display (page window display size)
+  "Put DISPLAY, of SIZE in pixels, on the overlay of PAGE in WINDOW.
+Center it, and give the margin below it the same width.  Return the
+height."
+  (let* ((overlay (pdf-roll-page-overlay page window))
          (margin-pos (+ (pdf-roll-page-to-pos page) 2))
          (margin-overlay (pdf-roll--pos-overlay margin-pos window 'pdf-roll-margin))
          (offset (when (> (window-width window t) (car size))
@@ -133,7 +146,7 @@ If INHIBIT-SLICE-P is non-nil, disregard `pdf-view-current-slice'."
     ;; changed the buffer, so a redisplay follows that draws PAGE again; skip
     ;; it here rather than write to an overlay that is no longer there.
     (when overlay
-      (overlay-put overlay 'display image)
+      (overlay-put overlay 'display display)
       (overlay-put overlay 'line-prefix offset))
     (when margin-overlay
       (overlay-put margin-overlay 'display `(space :width (,(car size)) :height (,pdf-roll-vertical-margin)))
@@ -153,7 +166,10 @@ on the image, so it does not depend on the image being there."
          (overlay (pdf-roll-page-overlay page window))
          (display (and overlay (overlay-get overlay 'display))))
     (when (or force (not display) (eq (car display) 'space))
-      (pdf-roll-display-image (pdf-view-create-page page window) page window))
+      (if pdf-view-render-asynchronously
+          (progn (pdf-roll-display-placeholder page window)
+                 (pdf-view-request-page page window))
+        (pdf-roll-display-image (pdf-view-create-page page window) page window)))
     (cdr (pdf-view-displayed-page-size page window))))
 
 (defun pdf-roll-display-pages (page &optional window force pscrolling)
@@ -187,6 +203,7 @@ Replaces the display property of the overlay holding a page with a space."
     ;; A page that is on the list but has no overlay is one the document no
     ;; longer has: PAGES comes from the `displayed-pages' of WINDOW, which
     ;; outlives the overlays `pdf-roll-initialize' recreates on a revert.
+    (pdf-view-withdraw-page-request page window)
     (let ((overlay (pdf-roll-page-overlay page window)))
       (when overlay
         (overlay-put overlay 'display (get 'pdf-roll 'display))))))

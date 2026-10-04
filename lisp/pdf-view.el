@@ -109,6 +109,18 @@ if available."
   :group 'pdf-view
   :type 'boolean)
 
+(defcustom pdf-view-render-asynchronously t
+  "Whether pages are rendered without waiting for the server.
+
+If non-nil, a page that is not rendered yet is shown as a blank
+placeholder of its size, and replaced by the page when the server has
+rendered it, so that redisplay never waits for the server.  If nil,
+redisplay waits until the page is rendered.
+
+This applies to `pdf-view-roll-minor-mode'."
+  :group 'pdf-view
+  :type 'boolean)
+
 (defface pdf-view-region
   '((((background dark)) (:inherit region))
     (((background light)) (:inherit region)))
@@ -523,6 +535,7 @@ PNG images in Emacs buffers."
   (add-hook 'kill-buffer-hook 'pdf-view-close-document nil t)
   (add-hook 'pdf-info-close-document-hook
             #'pdf-view--next-document-generation nil t)
+  (add-hook 'pdf-info-close-document-hook #'pdf-view--render-forget nil t)
   (pdf-view-add-hotspot-function
    'pdf-view-text-regions-hotspots-function -9)
 
@@ -1258,6 +1271,111 @@ See also `pdf-view-use-imagemagick'."
       :rotation (or pdf-view--current-rotation 0)
       :map hotspots
       :pointer 'arrow)))
+
+;; * ================================================================== *
+;; * Rendering without waiting
+;; * ================================================================== *
+
+(defvar-local pdf-view--render-queue nil
+  "Requests for pages to render, oldest first.
+Each is a list (PAGE WINDOW WIDTH GENERATION): PAGE is to be drawn in
+WINDOW at WIDTH pixels, for `pdf-view--document-generation' GENERATION.")
+
+(defvar-local pdf-view--render-in-flight nil
+  "The request the server is rendering, or nil.
+Only one is sent at a time, so that a request for a page that has since
+scrolled away can still be withdrawn from `pdf-view--render-queue'.")
+
+(defun pdf-view--render-request (page window)
+  "Return the request to render PAGE for WINDOW as it is now."
+  (list page window (car (pdf-view-desired-image-size page window))
+        pdf-view--document-generation))
+
+(defun pdf-view--render-request-current-p (request)
+  "Return non-nil if REQUEST still describes what its window needs."
+  (pcase-let ((`(,page ,window ,width ,generation) request))
+    (and (window-live-p window)
+         (eq (window-buffer window) (current-buffer))
+         (eq generation pdf-view--document-generation)
+         (<= page (pdf-cache-number-of-pages))
+         (eq width (car (pdf-view-desired-image-size page window))))))
+
+(defun pdf-view-request-page (page window)
+  "Have PAGE drawn in WINDOW when the server has rendered it.
+
+Return at once.  The page is drawn by `pdf-view--render-finish' from a
+timer, where waiting for the server is allowed again: the hotspot
+functions may still ask it questions."
+  (let ((request (pdf-view--render-request page window)))
+    (unless (or (member request pdf-view--render-queue)
+                (equal request pdf-view--render-in-flight))
+      (setq pdf-view--render-queue
+            (append pdf-view--render-queue (list request)))
+      (pdf-view--render-next))))
+
+(defun pdf-view-withdraw-page-request (page window)
+  "Forget any request to draw PAGE in WINDOW that is not sent yet."
+  (setq pdf-view--render-queue
+        (cl-remove-if (lambda (request)
+                        (and (eq (nth 0 request) page)
+                             (eq (nth 1 request) window)))
+                      pdf-view--render-queue)))
+
+(defun pdf-view--render-forget ()
+  "Forget every request; the document they were made for is closed.
+It is on `pdf-info-close-document-hook'."
+  (setq pdf-view--render-queue nil
+        pdf-view--render-in-flight nil))
+
+(defun pdf-view--render-next ()
+  "Send the oldest request that is still current, unless one is in flight."
+  (while (and (not pdf-view--render-in-flight)
+              pdf-view--render-queue)
+    (let ((request (pop pdf-view--render-queue)))
+      (when (pdf-view--render-request-current-p request)
+        (pcase-let ((`(,page ,_window ,width ,_generation) request))
+          (if (pdf-cache-lookup-image
+               page width (if pdf-view-use-scaling (* 2 width) width))
+              (pdf-view--render-finish-later request)
+            (let* ((buffer (current-buffer))
+                   (pdf-info-asynchronous
+                    (lambda (status data)
+                      (when (buffer-live-p buffer)
+                        (with-current-buffer buffer
+                          (pdf-view--render-arrived request status data))))))
+              (setq pdf-view--render-in-flight request)
+              (pdf-info-renderpage page width))))))))
+
+(defun pdf-view--render-arrived (request status data)
+  "Handle the reply STATUS and DATA to REQUEST, and send the next one.
+This runs from the filter of the server process, where the server may
+not be asked anything synchronously, so drawing is left to a timer."
+  (when (eq request pdf-view--render-in-flight)
+    (setq pdf-view--render-in-flight nil))
+  (pcase-let ((`(,page ,_window ,width ,generation) request))
+    (when (and (null status)
+               (eq generation pdf-view--document-generation))
+      (pdf-cache-put-image page width data)
+      (pdf-view--render-finish-later request)))
+  (pdf-view--render-next))
+
+(defun pdf-view--render-finish-later (request)
+  "Draw the page of REQUEST from a timer."
+  (let ((buffer (current-buffer)))
+    (run-at-time 0 nil (lambda ()
+                         (when (buffer-live-p buffer)
+                           (with-current-buffer buffer
+                             (pdf-view--render-finish request)))))))
+
+(defun pdf-view--render-finish (request)
+  "Draw the page of REQUEST, if its window still waits for it."
+  (pcase-let ((`(,page ,window ,_width ,_generation) request))
+    (when (and (pdf-view--render-request-current-p request)
+               pdf-view-roll-minor-mode
+               (pdf-roll-page-overlay page window)
+               (not (pdf-view-page-displayed-p window page)))
+      (pdf-view-display-image (pdf-view-create-page page window) page window)
+      (force-window-update window))))
 
 (defun pdf-view-page-displayed-p (&optional window page)
   "Return non-nil if WINDOW already shows an image for PAGE.
