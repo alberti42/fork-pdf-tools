@@ -902,7 +902,8 @@ In `pdf-view-single-page-mode', or if that option is nil, go to the
 next page instead, as `pdf-view-next-page-command' does."
   (interactive "p")
   (if (or pdf-view-single-page-mode (null pdf-view-page-key-lines))
-      (pdf-view-next-page-command n)
+      (let ((current-prefix-arg n))
+        (call-interactively #'pdf-view-next-page-command))
     (pdf-roll-scroll-forward (* (or n 1) pdf-view-page-key-lines))))
 
 (defun pdf-view-page-up (&optional n)
@@ -911,7 +912,8 @@ In `pdf-view-single-page-mode', or if that option is nil, go to the
 previous page instead, as `pdf-view-previous-page-command' does."
   (interactive "p")
   (if (or pdf-view-single-page-mode (null pdf-view-page-key-lines))
-      (pdf-view-previous-page-command n)
+      (let ((current-prefix-arg n))
+        (call-interactively #'pdf-view-previous-page-command))
     (pdf-roll-scroll-backward (* (or n 1) pdf-view-page-key-lines))))
 
 (defun pdf-view-next-page-command (&optional n)

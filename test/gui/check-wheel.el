@@ -5,9 +5,11 @@
 ;; Sends test.pdf wheel events as the macOS port makes them -- a count of
 ;; lines and a pixel delta, the count 0 for a gentle gesture -- through
 ;; the keymaps, with `pixel-scroll-precision-mode' off and on.  Passes if
-;; the wheel runs `pdf-roll-wheel-scroll' in both cases; without the
-;; mode, 20 gentle events of 2 pixels move the page by whole lines rather
-;; than not at all; with it, each event scrolls its pixels exactly; in
+;; the wheel runs `pdf-roll-wheel-scroll' in both cases, also over the
+;; fringe, PageDown runs `pdf-view-page-down' and `touch-end' nothing;
+;; without the mode, 20 gentle events of 2 pixels move the page by whole
+;; lines rather than not at all; with it, each event scrolls its pixels
+;; exactly; in
 ;; both, scrolling 40 events down across pages and 40 back up returns to
 ;; where it started; and in `pdf-view-single-page-mode' the wheel turns
 ;; the page.  Before `pdf-roll-wheel-scroll', gentle events did nothing,
@@ -52,6 +54,13 @@
         (gui-check-log "--- pixel-scroll-precision-mode %s" (if precision "on" "off"))
         (expect "the wheel runs" (eq (key-binding [wheel-down]) 'pdf-roll-wheel-scroll)
                 (key-binding [wheel-down]))
+        (expect "over the fringe, the wheel runs"
+                (eq (key-binding [left-fringe wheel-down]) 'pdf-roll-wheel-scroll)
+                (key-binding [left-fringe wheel-down]))
+        (expect "PageDown runs" (eq (key-binding [next]) 'pdf-view-page-down)
+                (key-binding [next]))
+        (expect "touch-end runs" (memq (key-binding [touch-end]) '(nil ignore))
+                (key-binding [touch-end]))
         (let ((gentle (check-wheel t 2.0 0 20)))
           (expect "20 gentle events of 2 px, 0 lines"
                   (if precision

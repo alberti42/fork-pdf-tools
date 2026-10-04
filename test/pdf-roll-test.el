@@ -548,9 +548,9 @@ With the option nil, or in the single-page view, they turn the page."
               ((symbol-function 'pdf-roll-scroll-backward)
                (lambda (n &rest _) (push (list 'backward n) calls)))
               ((symbol-function 'pdf-view-next-page-command)
-               (lambda (&rest _) (push 'next-page calls)))
+               (lambda (&rest _) (interactive) (push 'next-page calls)))
               ((symbol-function 'pdf-view-previous-page-command)
-               (lambda (&rest _) (push 'previous-page calls))))
+               (lambda (&rest _) (interactive) (push 'previous-page calls))))
       (with-temp-buffer
         (use-local-map pdf-view-mode-map)
         (should (eq 'pdf-view-page-down (key-binding (kbd "<next>"))))
