@@ -419,6 +419,7 @@ PNG images in Emacs buffers."
   ;; waiting for process output).
   (pdf-view-decrypt-document)
   (pdf-view-read-mode-line-data)
+  (pdf-cache-read-pagesizes)
 
   ;; Setup scroll functions
   (if (boundp 'mwheel-scroll-up-function) ; not --without-x build
@@ -712,6 +713,7 @@ Optional parameters IGNORE-AUTO and NOCONFIRM are defined as in
       (pdf-view-decrypt-document)
       ;; The file may have been rewritten with a different number of pages.
       (pdf-view-read-mode-line-data)
+      (pdf-cache-read-pagesizes)
       (pdf-view-redisplay t))))
 
 (defun pdf-view-close-document ()

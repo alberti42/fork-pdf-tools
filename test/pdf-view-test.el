@@ -403,3 +403,23 @@ settings; `image-display-size' cannot be called in batch."
               (setf (pdf-view-current-slice) nil))))
         (let ((pdf-view--current-rotation 180))
           (should (equal '(600 . 800) (pdf-view-displayed-page-size 1))))))))
+
+(ert-deftest pdf-view-page-sizes-are-read-at-open-and-revert ()
+  "After opening or reverting, no page size has to be asked for.
+
+Redisplay lays pages out from their sizes, and may not wait for the
+server."
+  (pdf-test-with-test-pdf
+    (pdf-view-mode)
+    (cl-flet ((sizes-asked ()
+                (let (queried)
+                  (cl-letf (((symbol-function 'pdf-info-query)
+                             (lambda (cmd &rest _) (push cmd queried) nil)))
+                    (dotimes (i (pdf-cache-number-of-pages))
+                      (pdf-cache-pagesize (1+ i))))
+                  queried)))
+      (should (equal 6 (pdf-cache-number-of-pages)))
+      (should-not (sizes-asked))
+      (pdf-view-revert-buffer nil t)
+      (should-not (sizes-asked))
+      (should (equal (pdf-info-pagesize 3) (pdf-cache-pagesize 3))))))
