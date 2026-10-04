@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master, merged, feat/async-render]
+    branches: [master, merged, feat/async-render, feat/single-page-roll]
   pull_request:
     branches: [master]
 
