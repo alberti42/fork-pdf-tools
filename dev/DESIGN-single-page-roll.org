@@ -95,6 +95,7 @@ Inside =pdf-roll.el=, =pdf-roll--get-display-property= (=pdf-roll.el:607=) advis
 - 2026-10-04: upstream #345 is left for last.
 - 2026-10-04: the end state.  =pdf-view-mode= is the continuous view, drawn by the machinery of =pdf-roll.el=.  The single-page experience is a minor mode on top of it, =pdf-view-single-page-mode=; users who want it add it to =pdf-view-mode-hook=.  The plain-mode path is deleted.
 - 2026-10-04: =pdf-view-roll-minor-mode= is then either deleted or kept as an obsolete name that warns when used -- never one that silently does nothing.
+- 2026-10-04: in the single-page view, =C-n= scrolls one line down the page; if the page has no line left to scroll, because its bottom is already at the bottom of the window, =C-n= turns to the next page if =pdf-view-turn-page-at-top-and-bottom= is non-nil, and otherwise does nothing.  =C-p= is the same at the top.  The rule does not depend on the page fitting the window.  Plain mode instead scrolls a page that fits up into blank space below it; that is not reproduced.
 
 * Known issues to check
 
@@ -103,6 +104,6 @@ Inside =pdf-roll.el=, =pdf-roll--get-display-property= (=pdf-roll.el:607=) advis
 
 * Next steps
 
-2. Build =pdf-view-single-page-mode= on top of today's =pdf-view-roll-minor-mode=: only the current page shows, the margins are hidden, the vscroll is clamped to the page, and scrolling past the bottom or the top turns the page as the tables above say.  A graphical check compares it with plain mode key by key.
+2. (Done, see the commit that adds this line.)  Build =pdf-view-single-page-mode= on top of today's =pdf-view-roll-minor-mode=: only the current page shows, the margins are hidden, the vscroll is clamped to the page, and scrolling past the bottom or the top turns the page as the tables above say.  A graphical check compares it with plain mode key by key.
 3. Make =pdf-view-mode= always draw with the machinery of =pdf-roll.el=; =pdf-view-roll-minor-mode= becomes obsolete, and the plain-mode path stays behind a variable for a while.
 4. Delete the plain-mode path and the 26 branches with it.

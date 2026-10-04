@@ -9,6 +9,11 @@
   + Links, annotations and text selection do nothing on a page still showing the old document.
 - The size of every page is read when the document is opened and reverted, so a page takes its room in the window before it is drawn.
 
+** One page at a time on top of continuous scrolling
+- New minor mode ~pdf-view-single-page-mode~
+  + Each window shows its current page alone, as ~pdf-view-mode~ does without ~pdf-view-roll-minor-mode~, while pages are drawn by roll mode: without waiting, and kept on screen through a revert.
+  + ~SPC~ and ~DEL~ scroll a screen and turn the page at its bottom and top; ~C-n~, ~C-p~ and the mouse wheel scroll by lines and turn the page there if ~pdf-view-turn-page-at-top-and-bottom~ is non-nil.
+
 ** Functionality improvements and fixes
 - ~SPC~, ~S-SPC~ and ~DEL~ scroll a screen in roll mode, as they do outside it; they scrolled one line.
 - Isearch no longer signals "Invalid image specification" when it wraps backward in roll mode.
