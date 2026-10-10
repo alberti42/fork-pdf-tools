@@ -19,6 +19,7 @@ Each is merged at the head its pull request has.
 - [[https://github.com/vedang/pdf-tools/pull/370][#370]] Fix query completion after response preprocessing errors (@benthamite).  Its code taken as it stands; its tests answer the server from a timer, which the first fix under [[*Mode line][Mode line]] stops a synchronous query running, so their harness now answers from the filter instead.  Merged from the pull request, no branch here.
 - [[https://github.com/vedang/pdf-tools/pull/371][#371]] fix(pdf-history): return to the position a page was left at (@alberti42).  Taken as it stands (branch =fix/history-restore-position=).
 - [[https://github.com/vedang/pdf-tools/pull/374][#374]] fix(pdf-info): run no timers while a synchronous query waits (@alberti42).  Filed 2026-10-03, the first of the three under [[*Mode line][Mode line]].  Taken as it stands (branch =fix/info-query-no-timers-while-waiting=).
+- [[https://github.com/vedang/pdf-tools/pull/375][#375]] Fix prefetch timer cleanup on buffer lifecycle changes (@ciolansteen).  Killing a PDF buffer, or changing its major mode, left the repeating idle timer of ~pdf-cache-prefetch-minor-mode~ running, still holding a reference to the former PDF buffer.  Taken as it stands (branch =fix/cache-prefetch-timer-cleanup=).
 
 * Fixes with no pull request yet
 
