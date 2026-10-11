@@ -19,6 +19,21 @@ further fixes that have no pull request yet.  [[file:CHANGES-merged.org][CHANGES
                         :files (:defaults "README" ("build" "Makefile") ("build" "server"))))
 #+end_src
 
+With the package manager built into Emacs 30 or later:
+
+#+begin_src emacs-lisp
+(use-package pdf-tools
+  :vc (:url "https://github.com/alberti42/fork-pdf-tools" :branch "merged"
+       :lisp-dir "lisp" :rev :newest))
+#+end_src
+
+On Emacs 29, evaluate this once instead:
+
+#+begin_src emacs-lisp
+(package-vc-install '(pdf-tools :url "https://github.com/alberti42/fork-pdf-tools"
+                                :branch "merged" :lisp-dir "lisp"))
+#+end_src
+
 The branch moves as fixes are added.  Tags named after a date, such as
 =merged-2026-09-27=, are snapshots of it, so that a report can say which one
 worked.  They are not releases of pdf-tools: the package still says version
