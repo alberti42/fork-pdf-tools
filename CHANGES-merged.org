@@ -2,7 +2,7 @@
 
 What the =merged= branch carries on top of upstream [[https://github.com/vedang/pdf-tools][pdf-tools]] =master= (365f882, 2026-01-08).  The README says what the branch is for.
 
-Every other branch here is one of two things: the head of a pull request already open upstream, listed below with its number, or a fix with no pull request yet, which is a candidate for one.  Nothing of either kind has reached upstream =master=, which has not moved since 2026-01-08.
+Every other branch here is one of three things: the head of a pull request already open upstream, listed below with its number; a fix with no pull request yet, which is a candidate for one; or a feature built on =merged=.  None of them has reached upstream =master=, which has not moved since 2026-01-08.
 
 * Pull requests open upstream
 
@@ -55,6 +55,13 @@ A mode-line construct is evaluated while Emacs is displaying, so it may neither 
 - fix(pdf-util): convert the page the window is showing.  ~pdf-annot-edit~ failed in a window that had only drawn the page in roll mode: =Wrong type argument: char-or-string-p, nil=.  (branch =fix/convert-page-displayed-image=)
 - fix: use ~when-let*~, which ~when-let~ became, and fix(pdf-roll): use ~if-let*~, which ~if-let~ became.  Emacs 31 made both obsolete.  (branch =fix/when-let-obsolete=)
 - feat(pdf-history): keep one provisional item while browsing a list.  While a follow mode moves the document, the history keeps one item for where browsing landed and replaces it on the next move, so =B= returns to the position you were reading.  This changes what the history records, so it will get its own pull request, after #371.  (branch =feat/history-provisional-entries=)
+
+* Features built on =merged=
+
+These branches start from =merged=, not from =master=.  The NEWS section of version 1.4.0 lists what they change for the user.
+
+- =feat/async-render=: pages are rendered without waiting for the server.  A page not rendered yet shows a blank placeholder of its size, and the page replaces it when the server has rendered it.  Reverting a document keeps the pages on screen until their new renders arrive.  The branch also requires Emacs 27.1.  Design in =dev/DESIGN-async-render.org=.
+- =feat/single-page-roll=, on top of =feat/async-render=: ~pdf-view-mode~ scrolls continuously, as ~pdf-view-roll-minor-mode~ did in 1.3.0.  New minor mode ~pdf-view-single-page-mode~ shows one page at a time, as ~pdf-view-mode~ did before.  ~pdf-view-roll-minor-mode~ is obsolete: it warns once per session and does nothing.  The mouse wheel and the trackpad scroll by what they report, and PageDown and PageUp scroll ~pdf-view-page-key-lines~ lines.  Design in =dev/DESIGN-single-page-roll.org=.
 
 * Documentation
 
