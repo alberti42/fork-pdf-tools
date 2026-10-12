@@ -72,16 +72,31 @@
   "Test that pdf-roll-default face is defined."
   (should (facep 'pdf-roll-default)))
 
-;;; Minor mode keymap tests
+;;; Key bindings
 
-(ert-deftest pdf-roll-minor-mode-keymap-exists ()
-  "Test that pdf-view-roll-minor-mode-map is defined with remappings."
-  (should (keymapp pdf-view-roll-minor-mode-map))
-  ;; Check that scroll commands are remapped
-  (should (lookup-key pdf-view-roll-minor-mode-map
-                      [remap pdf-view-previous-line-or-previous-page]))
-  (should (lookup-key pdf-view-roll-minor-mode-map
-                      [remap pdf-view-next-line-or-next-page])))
+(ert-deftest pdf-roll-space-scrolls-a-screen ()
+  "SPC, S-SPC and DEL scroll a screen, C-n a line."
+  (with-temp-buffer
+    (use-local-map pdf-view-mode-map)
+    (should (eq 'pdf-roll-scroll-screen-forward (key-binding (kbd "SPC"))))
+    (should (eq 'pdf-roll-scroll-screen-backward (key-binding (kbd "S-SPC"))))
+    (should (eq 'pdf-roll-scroll-screen-backward (key-binding (kbd "DEL"))))
+    (should (eq 'pdf-roll-scroll-forward (key-binding (kbd "C-n"))))
+    (should (eq 'undefined (key-binding (kbd "RET"))))))
+
+(ert-deftest pdf-roll-obsolete-mode-only-warns ()
+  "`pdf-view-roll-minor-mode' warns once per session and does nothing else."
+  (let ((pdf-roll--obsolete-mode-warned nil)
+        warnings)
+    (cl-letf (((symbol-function 'display-warning)
+               (lambda (&rest args) (push args warnings))))
+      (with-temp-buffer
+        (let ((text (buffer-string)))
+          (pdf-view-roll-minor-mode 1)
+          (pdf-view-roll-minor-mode -1)
+          (should (equal text (buffer-string)))))
+      (should (equal 1 (length warnings)))
+      (should (eq 'pdf-tools (car (car warnings)))))))
 
 ;;; Overlay lookup tests
 
@@ -360,7 +375,6 @@ a CALLBACK.  Timers run at once.  Images and pages measure 10x20."
          (set-window-buffer window (current-buffer))
          (pdf-view-mode)
          (pdf-roll-new-window-function window)
-         (setq-local pdf-view-roll-minor-mode t)
          (pdf-cache-clear-images)
          (setq drawn nil)
          ,@body))))
@@ -471,3 +485,85 @@ An image of another size would move the window off the layout."
       (should (equal 6 (pdf-view-current-page window)))
       (should (equal (- 5000 (window-text-height window t))
                      (image-mode-window-get 'vscroll window))))))
+
+(defmacro pdf-roll-test-with-single-page (&rest body)
+  "Run BODY in test.pdf in `pdf-view-single-page-mode', pages 1000 pixels high."
+  (declare (indent 0) (debug t))
+  `(pdf-roll-test-with-async-render
+     (cl-letf (((symbol-function 'pdf-view-displayed-page-size)
+                (lambda (&rest _) '(10 . 1000))))
+       (setq-local pdf-view-single-page-mode t)
+       (pdf-view-goto-page 2 window)
+       ,@body)))
+
+(defun pdf-roll-test-bottom (window)
+  "The vscroll of WINDOW with the bottom of a 1000 pixel page in view."
+  (- 1000 (window-text-height window t)))
+
+(ert-deftest pdf-view-single-page-hides-the-other-pages ()
+  "Only the current page of the window is visible."
+  (pdf-roll-test-with-single-page
+    (pdf-roll-pre-redisplay window)
+    (let ((pos (pdf-roll-page-to-pos 2)))
+      (should (invisible-p (1- pos)))
+      (should-not (invisible-p pos))
+      (should (invisible-p (1+ pos)))
+      (should (equal '(2) (image-mode-window-get 'displayed-pages window))))))
+
+(ert-deftest pdf-view-single-page-line-scrolling-turns-at-the-bottom ()
+  "C-n scrolls within the page, and at its bottom turns the page."
+  (pdf-roll-test-with-single-page
+    (let ((pdf-view-turn-page-at-top-and-bottom t))
+      (pdf-view-single-page--scroll 5000 pdf-view-turn-page-at-top-and-bottom)
+      (should (equal 2 (pdf-view-current-page window)))
+      (should (equal (pdf-roll-test-bottom window) (image-mode-window-get 'vscroll window)))
+      (pdf-view-single-page-next-line)
+      (should (equal 3 (pdf-view-current-page window)))
+      (should (equal 0 (image-mode-window-get 'vscroll window))))))
+
+(ert-deftest pdf-view-single-page-line-scrolling-stops-at-the-bottom ()
+  "With `pdf-view-turn-page-at-top-and-bottom' nil, C-n stops at the bottom."
+  (pdf-roll-test-with-single-page
+    (let ((pdf-view-turn-page-at-top-and-bottom nil))
+      (dotimes (_ 3) (pdf-view-single-page-next-line 2000))
+      (should (equal 2 (pdf-view-current-page window)))
+      (should (equal (pdf-roll-test-bottom window) (image-mode-window-get 'vscroll window)))
+      ;; SPC still turns the page.
+      (pdf-view-single-page-scroll-up)
+      (should (equal 3 (pdf-view-current-page window))))))
+
+(ert-deftest pdf-view-single-page-scrolling-up-turns-to-the-bottom ()
+  "At the top of the page, DEL shows the previous page from its bottom."
+  (pdf-roll-test-with-single-page
+    (pdf-view-single-page-scroll-down)
+    (should (equal 1 (pdf-view-current-page window)))
+    (should (equal (pdf-roll-test-bottom window) (image-mode-window-get 'vscroll window)))))
+
+(ert-deftest pdf-view-page-keys-scroll-lines ()
+  "PageDown and PageUp scroll `pdf-view-page-key-lines' lines.
+With the option nil, or in the single-page view, they turn the page."
+  (let (calls)
+    (cl-letf (((symbol-function 'pdf-roll-scroll-forward)
+               (lambda (n &rest _) (push (list 'forward n) calls)))
+              ((symbol-function 'pdf-roll-scroll-backward)
+               (lambda (n &rest _) (push (list 'backward n) calls)))
+              ((symbol-function 'pdf-view-next-page-command)
+               (lambda (&rest _) (interactive) (push 'next-page calls)))
+              ((symbol-function 'pdf-view-previous-page-command)
+               (lambda (&rest _) (interactive) (push 'previous-page calls))))
+      (with-temp-buffer
+        (use-local-map pdf-view-mode-map)
+        (should (eq 'pdf-view-page-down (key-binding (kbd "<next>"))))
+        (should (eq 'pdf-view-page-up (key-binding (kbd "<prior>"))))
+        (let ((pdf-view-page-key-lines 5)
+              (pdf-view-single-page-mode nil))
+          (pdf-view-page-down)
+          (pdf-view-page-up 2))
+        (let ((pdf-view-page-key-lines nil)
+              (pdf-view-single-page-mode nil))
+          (pdf-view-page-down))
+        (let ((pdf-view-page-key-lines 5)
+              (pdf-view-single-page-mode t))
+          (pdf-view-page-up))))
+    (should (equal '((forward 5) (backward 10) next-page previous-page)
+                   (reverse calls)))))

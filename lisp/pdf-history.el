@@ -162,11 +162,8 @@ The value is the upper left corner of the visible region of the
 page image, relative to the size of that image, which is what
 `pdf-view-bookmark-make-record' stores as the bookmark\='s origin.
 It is nil if WINDOW displays no PDF, and nil while WINDOW has no
-image to measure: `pdf-view-new-window-function' calls
-`pdf-view-goto-page' for a window that has not drawn a page yet,
-and `pdf-view-image-size' signals rather than measuring nothing.
-That call happens inside redisplay, where a signal is reported
-and the rest of the frame is dropped."
+image to measure, since `pdf-view-image-size' signals rather than
+measuring nothing."
   (when (pdf-util-pdf-window-p window)
     (let ((edges (ignore-errors (pdf-util-image-displayed-edges window t))))
       (when edges

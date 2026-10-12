@@ -282,8 +282,7 @@ Has no effect if `pdf-sync-backward-use-heuristic' is nil."
       (error "Outside of image area"))
     (pdf-sync-backward-search
      (car xy) (cdr xy)
-     (and (bound-and-true-p pdf-view-roll-minor-mode)
-          (/ (+ (posn-point posn) 3) 4)))))
+     (/ (+ (posn-point posn) 3) 4))))
 
 (defun pdf-sync-backward-search (x y &optional page)
   "Go to the source corresponding to image coordinates X, Y on PAGE.

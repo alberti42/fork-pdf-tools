@@ -435,11 +435,10 @@ server."
       (should (equal (+ 2 generation) pdf-view--document-generation)))))
 
 (ert-deftest pdf-view-page-displayed-p-a-space-is-not-a-page ()
-  "In roll mode a page not drawn yet shows a `space', not an image."
+  "A page not drawn yet shows a `space', not an image."
   (with-temp-buffer
     (insert " ")
-    (let ((overlay (make-overlay 1 2))
-          (pdf-view-roll-minor-mode t))
+    (let ((overlay (make-overlay 1 2)))
       (cl-letf (((symbol-function 'pdf-roll-page-overlay) (lambda (&rest _) overlay)))
         (overlay-put overlay 'display '(space :width 25 :height 1000))
         (should-not (pdf-view-page-displayed-p nil 1))
@@ -454,7 +453,6 @@ server."
   (with-temp-buffer
     (insert " ")
     (let ((overlay (make-overlay 1 2))
-          (pdf-view-roll-minor-mode t)
           (pdf-view--document-generation 3))
       (cl-letf (((symbol-function 'pdf-roll-page-overlay) (lambda (&rest _) overlay)))
         (overlay-put overlay 'pdf-view-generation 3)
@@ -475,3 +473,26 @@ server."
                 ((symbol-function 'pdf-view-page-stale-p) (lambda (&rest _) t)))
         (pdf-view-mouse-set-region event)
         (should-not tracked)))))
+
+(ert-deftest pdf-view-continuous-is-an-alias ()
+  "The old name of `pdf-view-turn-page-at-top-and-bottom' still works."
+  (let ((pdf-view-continuous nil))
+    (should-not pdf-view-turn-page-at-top-and-bottom))
+  (should (get 'pdf-view-continuous 'byte-obsolete-variable)))
+
+(ert-deftest pdf-view-mode-has-no-line-numbers ()
+  "`global-display-line-numbers-mode' leaves PDF buffers alone."
+  (let ((global global-display-line-numbers-mode))
+    (unwind-protect
+        (progn
+          (global-display-line-numbers-mode 1)
+          (pdf-test-with-test-pdf
+            (pdf-view-mode)
+            ;; What the command loop does after a major mode change.
+            (run-hooks 'post-command-hook)
+            (should-not display-line-numbers-mode))
+          (with-temp-buffer
+            (text-mode)
+            (run-hooks 'post-command-hook)
+            (should display-line-numbers-mode)))
+      (global-display-line-numbers-mode (if global 1 -1)))))
