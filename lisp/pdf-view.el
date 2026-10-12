@@ -45,6 +45,7 @@
 (declare-function pdf-roll-page-overlay "pdf-roll")
 (declare-function pdf-roll-page-at-current-pos "pdf-roll")
 (declare-function pdf-roll-display-image "pdf-roll")
+(declare-function pdf-roll-revert-buffer "pdf-roll")
 
 (defvar pdf-view-roll-minor-mode nil)
 
@@ -106,6 +107,18 @@ This variable affects both the reuse of higher-resolution images
 as lower-resolution ones by down-scaling the image.  As well as
 the rendering of higher-resolution for high-resolution displays,
 if available."
+  :group 'pdf-view
+  :type 'boolean)
+
+(defcustom pdf-view-render-asynchronously t
+  "Whether pages are rendered without waiting for the server.
+
+If non-nil, a page that is not rendered yet is shown as a blank
+placeholder of its size, and replaced by the page when the server has
+rendered it, so that redisplay never waits for the server.  If nil,
+redisplay waits until the page is rendered.
+
+This applies to `pdf-view-roll-minor-mode'."
   :group 'pdf-view
   :type 'boolean)
 
@@ -273,6 +286,19 @@ See `pdf-view-read-mode-line-data'.")
 
 See `pdf-view-read-mode-line-data'.")
 
+(defvar-local pdf-view--document-generation 0
+  "How many times the document of the buffer has been closed.
+
+A revert closes the document and opens the file again, which may have
+changed.  A request to the server, or an image drawn, records the
+generation it was made in, and is out of date when the generation has
+moved on since.  See `pdf-view--next-document-generation'.")
+
+(defun pdf-view--next-document-generation ()
+  "Count one more closing of the document of the buffer.
+It is on `pdf-info-close-document-hook'."
+  (setq pdf-view--document-generation (1+ pdf-view--document-generation)))
+
 (defvar-local pdf-view-active-region nil
   "The active region as a cons cell of page and list of edges.
 
@@ -419,6 +445,7 @@ PNG images in Emacs buffers."
   ;; waiting for process output).
   (pdf-view-decrypt-document)
   (pdf-view-read-mode-line-data)
+  (pdf-cache-read-pagesizes)
 
   ;; Setup scroll functions
   (if (boundp 'mwheel-scroll-up-function) ; not --without-x build
@@ -507,6 +534,9 @@ PNG images in Emacs buffers."
   (add-hook 'write-contents-functions
             'pdf-view--write-contents-function nil t)
   (add-hook 'kill-buffer-hook 'pdf-view-close-document nil t)
+  (add-hook 'pdf-info-close-document-hook
+            #'pdf-view--next-document-generation nil t)
+  (add-hook 'pdf-info-close-document-hook #'pdf-view--render-forget nil t)
   (pdf-view-add-hotspot-function
    'pdf-view-text-regions-hotspots-function -9)
 
@@ -696,8 +726,16 @@ has put the document in the buffer for Emacs to write."
   "Revert buffer while preserving current modes.
 
 Optional parameters IGNORE-AUTO and NOCONFIRM are defined as in
-`revert-buffer'."
+`revert-buffer'.  With `pdf-view-roll-minor-mode' this is
+`pdf-roll-revert-buffer'."
   (interactive (list (not current-prefix-arg)))
+  (if pdf-view-roll-minor-mode
+      (pdf-roll-revert-buffer ignore-auto noconfirm)
+    (pdf-view--revert-buffer ignore-auto noconfirm)))
+
+(defun pdf-view--revert-buffer (ignore-auto noconfirm)
+  "Revert buffer as `pdf-view-revert-buffer' does outside roll mode.
+IGNORE-AUTO and NOCONFIRM are as in `revert-buffer'."
   ;; Bind to default so that we can use pdf-view-revert-buffer as
   ;; revert-buffer-function.  A binding of nil is needed in Emacs 24.3, but in
   ;; later versions the semantics that nil means the default function should
@@ -712,6 +750,7 @@ Optional parameters IGNORE-AUTO and NOCONFIRM are defined as in
       (pdf-view-decrypt-document)
       ;; The file may have been rewritten with a different number of pages.
       (pdf-view-read-mode-line-data)
+      (pdf-cache-read-pagesizes)
       (pdf-view-redisplay t))))
 
 (defun pdf-view-close-document ()
@@ -1237,9 +1276,141 @@ See also `pdf-view-use-imagemagick'."
                     window page size)))
     (pdf-view-create-image data
       :width (car size)
+      :height (cdr size)
       :rotation (or pdf-view--current-rotation 0)
       :map hotspots
       :pointer 'arrow)))
+
+;; * ================================================================== *
+;; * Rendering without waiting
+;; * ================================================================== *
+
+(defvar-local pdf-view--render-queue nil
+  "Requests for pages to render, oldest first.
+Each is a list (PAGE WINDOW WIDTH GENERATION): PAGE is to be drawn in
+WINDOW at WIDTH pixels, for `pdf-view--document-generation' GENERATION.")
+
+(defvar-local pdf-view--render-in-flight nil
+  "The request the server is rendering, or nil.
+Only one is sent at a time, so that a request for a page that has since
+scrolled away can still be withdrawn from `pdf-view--render-queue'.")
+
+(defun pdf-view--render-request (page window)
+  "Return the request to render PAGE for WINDOW as it is now."
+  (list page window (car (pdf-view-desired-image-size page window))
+        pdf-view--document-generation))
+
+(defun pdf-view--render-request-current-p (request)
+  "Return non-nil if REQUEST still describes what its window needs."
+  (pcase-let ((`(,page ,window ,width ,generation) request))
+    (and (window-live-p window)
+         (eq (window-buffer window) (current-buffer))
+         (eq generation pdf-view--document-generation)
+         (<= page (pdf-cache-number-of-pages))
+         (eq width (car (pdf-view-desired-image-size page window))))))
+
+(defun pdf-view-request-page (page window)
+  "Have PAGE drawn in WINDOW when the server has rendered it.
+
+Return at once.  The page is drawn by `pdf-view--render-finish' from a
+timer, where waiting for the server is allowed again: the hotspot
+functions may still ask it questions."
+  (let ((request (pdf-view--render-request page window)))
+    (unless (or (member request pdf-view--render-queue)
+                (equal request pdf-view--render-in-flight))
+      (setq pdf-view--render-queue
+            (append pdf-view--render-queue (list request)))
+      (pdf-view--render-next))))
+
+(defun pdf-view-withdraw-page-request (page window)
+  "Forget any request to draw PAGE in WINDOW that is not sent yet."
+  (setq pdf-view--render-queue
+        (cl-remove-if (lambda (request)
+                        (and (eq (nth 0 request) page)
+                             (eq (nth 1 request) window)))
+                      pdf-view--render-queue)))
+
+(defun pdf-view--render-forget ()
+  "Forget every request; the document they were made for is closed.
+It is on `pdf-info-close-document-hook'."
+  (setq pdf-view--render-queue nil
+        pdf-view--render-in-flight nil))
+
+(defun pdf-view--render-next ()
+  "Send the oldest request that is still current, unless one is in flight."
+  (while (and (not pdf-view--render-in-flight)
+              pdf-view--render-queue)
+    (let ((request (pop pdf-view--render-queue)))
+      (when (pdf-view--render-request-current-p request)
+        (pcase-let ((`(,page ,_window ,width ,_generation) request))
+          (if (pdf-cache-lookup-image
+               page width (if pdf-view-use-scaling (* 2 width) width))
+              (pdf-view--render-finish-later request)
+            (let* ((buffer (current-buffer))
+                   (pdf-info-asynchronous
+                    (lambda (status data)
+                      (when (buffer-live-p buffer)
+                        (with-current-buffer buffer
+                          (pdf-view--render-arrived request status data))))))
+              (setq pdf-view--render-in-flight request)
+              (pdf-info-renderpage page width))))))))
+
+(defun pdf-view--render-arrived (request status data)
+  "Handle the reply STATUS and DATA to REQUEST, and send the next one.
+This runs from the filter of the server process, where the server may
+not be asked anything synchronously, so drawing is left to a timer."
+  (when (eq request pdf-view--render-in-flight)
+    (setq pdf-view--render-in-flight nil))
+  (pcase-let ((`(,page ,_window ,width ,generation) request))
+    (when (and (null status)
+               (eq generation pdf-view--document-generation))
+      (pdf-cache-put-image page width data)
+      (pdf-view--render-finish-later request)))
+  (pdf-view--render-next))
+
+(defun pdf-view--render-finish-later (request)
+  "Draw the page of REQUEST from a timer."
+  (let ((buffer (current-buffer)))
+    (run-at-time 0 nil (lambda ()
+                         (when (buffer-live-p buffer)
+                           (with-current-buffer buffer
+                             (pdf-view--render-finish request)))))))
+
+(defun pdf-view--page-up-to-date-p (window page width)
+  "Return non-nil if WINDOW shows PAGE drawn WIDTH pixels wide, as it is now.
+A page that shows a placeholder, an image of a document since closed, or
+an image of another width is not."
+  (and (pdf-view-page-displayed-p window page)
+       (not (pdf-view-page-stale-p window page))
+       (eq width (overlay-get (pdf-roll-page-overlay page window)
+                              'pdf-view-width))))
+
+(defun pdf-view--render-finish (request)
+  "Draw the page of REQUEST, if its window still waits for it."
+  (pcase-let ((`(,page ,window ,width ,_generation) request))
+    (when (and (pdf-view--render-request-current-p request)
+               pdf-view-roll-minor-mode
+               (pdf-roll-page-overlay page window)
+               (not (pdf-view--page-up-to-date-p window page width)))
+      (pdf-view-display-image (pdf-view-create-page page window) page window)
+      (force-window-update window))))
+
+(defun pdf-view-page-stale-p (&optional window page)
+  "Return non-nil if WINDOW shows PAGE as it was in a document since closed.
+
+A revert closes the document and opens the file again, and a page keeps
+showing what it showed until it is drawn anew.  Its hotspots then belong
+to the old document, so a click on them must not act.  WINDOW defaults
+to the selected one and PAGE to the page it shows.  See
+`pdf-view--document-generation'."
+  (let* ((window (if (windowp window) window (selected-window)))
+         (overlay (if pdf-view-roll-minor-mode
+                      (pdf-roll-page-overlay
+                       (or page (pdf-view-current-page window)) window)
+                    (pdf-view-current-overlay window))))
+    (and overlay
+         (not (eq (overlay-get overlay 'pdf-view-generation)
+                  pdf-view--document-generation)))))
 
 (defun pdf-view-page-displayed-p (&optional window page)
   "Return non-nil if WINDOW already shows an image for PAGE.
@@ -1258,10 +1429,11 @@ nothing, so it may be called while Emacs is displaying."
                (and overlay (overlay-get overlay 'display)))
            (image-get-display-property))))
     ;; A display property may name more than the image, and may also be the
-    ;; image specification itself, as it is outside roll mode.
-    (and (or (and (consp display-prop)
-                  (assoc 'image display-prop))
-             display-prop)
+    ;; image specification itself, as it is outside roll mode.  A `space' is
+    ;; what roll mode shows for a page it has not drawn.
+    (and (or (eq (car-safe display-prop) 'image)
+             (and (consp display-prop)
+                  (assoc 'image display-prop)))
          t)))
 
 (defun pdf-view-displayed-image (&optional window page)
@@ -1277,7 +1449,7 @@ the image itself, ready for `create-image' or `pdf-util-convert-image'."
   (let ((display-prop (if pdf-view-roll-minor-mode
                           (progn (setq window (if (windowp window) window (selected-window)))
                                  (setq page (or page (pdf-view-current-page window)))
-                                 (unless (memq page (image-mode-window-get 'displayed-pages window))
+                                 (unless (pdf-view-page-displayed-p window page)
                                    (pdf-view-display-page page window))
                                  (overlay-get (pdf-roll-page-overlay page window) 'display))
                         (image-get-display-property))))
@@ -1343,6 +1515,7 @@ It is equal to \(LEFT . TOP\) of the current slice in pixel."
                                      `(space :align-to
                                        ,(/ (- (window-width window)
                                               displayed-width) 2)))))
+          (overlay-put ol 'pdf-view-generation pdf-view--document-generation)
           (overlay-put ol 'display
                        (if slice
                            (list (cons 'slice
@@ -1473,12 +1646,39 @@ If WINDOW is t, redisplay pages in all windows."
          (setq scale height-scale))
         (t
          (setq scale width-scale))))
-    (let ((width (floor (* (car pagesize) scale)))
-          (height (floor (* (cdr pagesize) scale))))
-      (when (> width (max 1 (or pdf-view-max-image-width width)))
-        (setq width pdf-view-max-image-width
-              height (* height (/ (float pdf-view-max-image-width) width))))
-      (cons (max 1 width) (max 1 height)))))
+    (let ((width (max 1 (min (floor (* (car pagesize) scale))
+                             (or pdf-view-max-image-width most-positive-fixnum)))))
+      ;; The height is computed from the width the way epdfinfo computes
+      ;; it, and `pdf-view-create-page' passes both to Emacs.  Emacs
+      ;; would otherwise compute the height of a cached image it scales
+      ;; from that image's own, already rounded, proportions, and the
+      ;; same page would come out one pixel taller or shorter depending
+      ;; on what the cache held.
+      (cons width
+            (max 1 (floor (+ (* (/ (float width) (car pagesize))
+                                (cdr pagesize))
+                             0.5)))))))
+
+(defun pdf-view-displayed-page-size (&optional page window)
+  "Return the size in pixels, (WIDTH . HEIGHT), at which WINDOW shows PAGE.
+
+This is the size of the image `pdf-view-create-page' makes, after
+`pdf-view-image-relief', `pdf-view--current-rotation' and the slice of
+WINDOW are applied, as `pdf-roll-display-image' displays it.  It is
+computed from the size of the page and draws nothing, so it is known
+before the image is.  Only rotations by multiples of 90 degrees are
+taken into account."
+  (let* ((size (pdf-view-desired-image-size page window))
+         (relief (* 2 (abs (or pdf-view-image-relief 0))))
+         (width (+ (car size) relief))
+         (height (+ (cdr size) relief))
+         (slice (pdf-view-current-slice window)))
+    (when (memq (or pdf-view--current-rotation 0) '(90 270))
+      (cl-rotatef width height))
+    (if slice
+        (let ((edges (pdf-util-scale slice (cons width height) 'round)))
+          (cons (nth 2 edges) (nth 3 edges)))
+      (cons width height))))
 
 (defun pdf-view-text-regions-hotspots-function (page size)
   "Return a list of hotspots for text regions on PAGE using SIZE.
@@ -1678,9 +1878,9 @@ Deactivate the region if DEACTIVATE-P is non-nil."
     (deactivate-mark)
     (pdf-view-redisplay t)))
 
-(defun pdf-view-mouse-set-region (event &optional allow-extend-p
-                                        rectangle-p
-                                        selection-style)
+(cl-defun pdf-view-mouse-set-region (event &optional allow-extend-p
+                                           rectangle-p
+                                           selection-style)
   "Select a region of text using the mouse with mouse event EVENT.
 
 Allow for stacking of regions, if ALLOW-EXTEND-P is non-nil.
@@ -1690,12 +1890,18 @@ Create a rectangular region, if RECTANGLE-P is non-nil.
 Overwrite `pdf-view-selection-style' with SELECTION-STYLE,
 which is one of `glyph', `word', or `line'.
 
-Stores the region in `pdf-view-active-region'."
+Stores the region in `pdf-view-active-region'.  Nothing is selected on
+a page that still shows a document since closed, see
+`pdf-view-page-stale-p'."
   (interactive "@e")
   (setq pdf-view--have-rectangle-region rectangle-p)
   (unless (and (eventp event)
                (mouse-event-p event))
     (signal 'wrong-type-argument (list 'mouse-event-p event)))
+  (when (pdf-view-page-stale-p
+         nil (when pdf-view-roll-minor-mode
+               (/ (+ 3 (posn-point (event-start event))) 4)))
+    (cl-return-from pdf-view-mouse-set-region nil))
   (unless (and allow-extend-p
                (or (null (get this-command 'pdf-view-region-window))
                    (equal (get this-command 'pdf-view-region-window)

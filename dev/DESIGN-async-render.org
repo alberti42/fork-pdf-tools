@@ -1,0 +1,166 @@
+#+TITLE: Taking the render out of redisplay
+
+Written 2026-10-03, revised 2026-10-04 after review, and implemented the same day on =feat/async-render=, a branch from =merged=.  "What was built" at the end says where the work departs from the plan.  File and line references in the plan are to =merged= as of 2026-10-03.
+
+* What is wrong
+
+Emacs evaluates some Lisp while it is displaying.  Code reached from there must not wait for another process: the wait runs timers and other processes' filters and sentinels, so arbitrary Lisp runs in the middle of a redisplay, and ~display_mode_line~ holds a pointer into the glyph matrix across the construct, so Lisp that reallocates the matrix leaves it dangling and Emacs crashes (Emacs [[https://debbugs.gnu.org/cgi/bugreport.cgi?bug=81903][bug#81903]]).
+
+pdf-tools reaches epdfinfo from three places that run during redisplay.
+
+- =lisp/pdf-roll.el:466= puts ~pdf-roll-pre-redisplay~ on ~pre-redisplay-functions~.  It reaches ~pdf-roll-display-pages~ (157) -> ~pdf-roll-display-page~ (143) -> ~pdf-view-create-page~ -> ~pdf-cache-renderpage~ (=pdf-cache.el:317=), and on a cache miss that is a synchronous ~pdf-info-renderpage~ at =pdf-cache.el:328=.  This is the main road: every scroll onto an undrawn page blocks redisplay until poppler answers.
+- =lisp/pdf-view.el:504= puts ~pdf-view-redisplay-some-windows~ on ~window-configuration-change-hook~, whose docstring begins "Functions called during redisplay when window configuration has changed."  Same render chain, on configuration changes rather than on every redisplay.
+- The two mode-line constructs, =pdf-misc.el:56= and =pdf-view.el:466=.  These are closed by the three branches listed at the end.
+
+The render is not the only query on the main road.  ~pdf-view-create-page~ (=pdf-view.el:1228=) also builds the image map through ~pdf-view-apply-hotspot-functions~, and the hotspot functions ask epdfinfo for the page's links (~pdf-cache-pagelinks~), text regions (~pdf-cache-textregions~) and annotations (~pdf-annot-getannots~, which is not cached at all).  So drawing a page makes up to four synchronous queries.
+
+Two caches exist and neither removes the problem.  ~pdf-cache--image-cache~ (=pdf-cache.el:180=) is a buffer-local LRU of rendered PNGs bounded by ~pdf-cache-image-limit~, default 64, keyed by page and width; ~pdf-cache--data~ caches five commands only -- ~pagelinks~, ~number-of-pages~, ~boundingbox~, ~textregions~, ~pagesize~ (=pdf-cache.el:165=).  Both are cleared on ~pdf-info-close-document-hook~ (=pdf-cache.el:78= and =264=), so every revert puts a full set of misses in front of the next redisplay.  Widening the cache does not help either: entries are keyed by width, so a window resize or a zoom voids all of them.
+
+* What to do instead
+
+Do not wait.  On a cache miss, draw a correctly sized placeholder, ask for the render asynchronously, and put the image on the overlay when it arrives.
+
+Metadata and images are different questions.  Page sizes, links, text and labels are cheap, and ~pdf-info-compose-queries~ batches several into one round trip.  Images scale linearly with pages; asking for all of them at once saves no work, it only moves the wait.
+
+The pieces are already in the tree.
+
+- ~pdf-cache-prefetch-minor-mode~ (=pdf-cache.el:378=) already renders ahead from an idle timer and already does it asynchronously, binding ~pdf-info-asynchronous~ at =pdf-cache.el:446=.  That is the pattern; it just is not what a cache miss takes.
+- pdf-roll already has the overlays to put a placeholder on: the page overlay and the margin overlay, found by category in ~pdf-roll--pos-overlay~ (=pdf-roll.el:67=).
+- ~pdf-info-compose-queries~ batches several queries into one round trip, and "handles synchronous and asynchronous calls, i.e. ~pdf-info-asynchronous~ is non-nil, transparently" (=pdf-info.el:813=).
+
+** Metadata at open and at revert
+
+The page count and the size of every page are read in one composed query when the document is opened and after each revert, and stored in ~pdf-cache--data~.  Both are places where waiting is allowed: ~pdf-view-mode~ runs from ~find-file~, a command, and already opens the document (=pdf-view.el:565=) and reads the page count (~pdf-view-read-mode-line-data~, =pdf-view.el:421=) before the first redisplay; ~pdf-roll-initialize~ runs from ~revert-buffer~ or from a timer.  The query is synchronous.  Evince, Okular and Zathura also read every page size at open and render on demand.
+
+If the reply turns out to be slow for large documents, measure first whether epdfinfo or the Lisp parsing of one line per page is the cost.  A more compact reply format (JSON Lines, or Lisp data read with ~read~) is the remedy for the second.
+
+** Page geometry
+
+Geometry must stop depending on the rendered image.  ~pdf-roll-display-pages~ (=pdf-roll.el:157=) reads the height returned by ~pdf-roll-display-page~ to decide how many pages fill the window, and ~pdf-roll-set-vscroll~ clamps the vscroll to that height.  With a placeholder there is no image yet.
+
+One function returns the displayed size of a page from its page size, the window, the slice and the rotation.  The layout and the placeholder both use it, so a placeholder has the size of the image that replaces it and nothing moves when the image arrives.  It has to reproduce what ~image-display-size~ returns today in ~pdf-roll-display-image~:
+
+- the slice: ~pdf-roll-maybe-slice-image~ (=pdf-roll.el:109=) shows only the slice, so the displayed height is the rendered height times the slice height;
+- the rotation: ~pdf-view--current-rotation~ is passed to ~create-image~ as ~:rotation~ (=pdf-view.el:1240=), and at 90 and 270 degrees width and height swap;
+- ~pdf-view-max-image-width~.
+
+~pdf-view-desired-image-size~ (=pdf-view.el:1452=) is the starting point.  It handles none of the three for the displayed height, and it has a bug of its own: under ~pdf-view-max-image-width~ it sets ~width~ to the cap before it computes ~height~ from their ratio, so the ratio is 1 and the height is never reduced.  That bug is independent of this design and can go upstream as its own fix.
+
+A test renders pages with and without a slice, at 0 and 90 degrees, with and without the width cap, and checks that the function returns ~image-display-size~ of the real image.  That test is what makes "no behaviour change" checkable.
+
+** The asynchronous render
+
+On a miss, ~pdf-roll-display-page~ issues one asynchronous composed query for the page: the image, the links, the text regions and the annotations.  It returns the height from the geometry function and leaves the placeholder.  When the reply arrives, the handler builds the image with its map, puts it on the overlay with one ~overlay-put~, puts it in ~pdf-cache--image-cache~, and calls ~force-window-update~ on the window.  Redisplay then never waits.  The placeholder has no map.
+
+Image and map arrive together.  The server answers all parts of a composed query before it replies, and the metadata parts are short next to the render, so splitting them would add a second round trip, a second ~overlay-put~ and a second stale-reply check.  Split only if a measurement shows that ~getannots~ on pages with many annotations delays the image.
+
+A reply must be dropped rather than drawn when any of these is true: the window is dead, the window's width is no longer the width the image was rendered at, the buffer's document has been closed since the request, or the page overlay is gone.  Tag each request with (page, window, width, document generation) and compare on arrival.  The document generation is a buffer-local counter bumped from ~pdf-info-close-document-hook~.
+
+Requests must also be coalesced: a second redisplay before the first reply must not ask again for the same page at the same width.
+
+The synchronous path has to stay for callers that genuinely need the bytes now -- ~pdf-view-extract-region-image~, the annotation and isearch code, the tests.  Those run as commands, where waiting is allowed.  So the split is by caller, not global: a non-blocking entry point used by the redisplay route, the existing blocking one everywhere else.
+
+** Revert keeps the old pages
+
+Today ~revert-buffer~ replaces the buffer text, and the page overlays have ~evaporate~ set (=pdf-roll.el:28=), so they and their images are gone before ~pdf-roll-initialize~ runs.  With an asynchronous render that would show blank placeholders after every compilation.
+
+Instead pdf-roll reverts without touching the buffer text: it reopens the document, reads the metadata as above, and adds or removes overlays only if the page count changed.  Each page keeps its old image until the reply for its new one arrives.  A page whose size changed shows its old image at the old size until then; that is rare and accepted.
+
+The old image keeps its old map.  The hand pointer and the tooltip over an old link match the old page on screen, so they stay.  Clicks must not act on it.  Each page overlay records the document generation it was drawn at, and a page is stale when that differs from the buffer's current generation.  A revert bumps the counter and touches nothing else.  There is no single dispatch point for clicks on the map -- each hotspot function binds its own keys, and the link closure in ~pdf-links-hotspots-function~ (=pdf-links.el:131=) holds the link's data -- so three handlers check the generation:
+
+- the link click (the closure that calls ~pdf-links-action-perform~),
+- the annotation hotspots (~pdf-annot-create-hotspots~),
+- text selection, which reads text regions from the server and would otherwise select text of the new document on top of the old picture.
+
+Once nothing waits during redisplay, a sentinel can no longer revert the buffer while pdf-roll is drawing.  The postponed ~pdf-roll-initialize~ (~pdf-roll--delay-revert~, =pdf-roll.el:426=) and the call to ~pdf-roll-new-window-function~ from ~pdf-roll-pre-redisplay~ (=pdf-roll.el:248=) on a window without overlays exist for that case; check whether they can go.
+
+** Few requests in flight
+
+epdfinfo answers in order and cannot cancel a request.  ~pdf-info.el~ sends every request, synchronous or not, through one ~tq~ transaction queue (=pdf-info.el:312=), so the queue stays.  What has to change is how much goes into it: if every redisplay asks for the pages it shows, fast scrolling queues renders that will be dropped on arrival, epdfinfo still renders them, and every synchronous command query waits behind them.  Coalescing covers the same page asked for twice, not pages already scrolled past.
+
+So the redisplay path only records which pages it wants, in a list held in Lisp and replaced on every redisplay, and at most one or two renders are sent to epdfinfo at a time.  When a reply arrives, its handler takes the next page from the current list.  Pages that have scrolled away are never requested.  ~pdf-cache--prefetch-pages~ (=pdf-cache.el:426=) already works this way: it sends one render, and its reply handler sends the next.
+
+** Plain pdf-view-mode
+
+The same design applies to plain ~pdf-view-mode~: the geometry function, the placeholder, the composed query, the generation counter and the click guard.  A window there shows one page on one overlay.
+
+In plain mode, turning a page is a command (~pdf-view-display-page~, =pdf-view.el:1314=, called from ~pdf-view-goto-page~), so waiting there is allowed; only ~pdf-view-redisplay-some-windows~, run from ~window-configuration-change-hook~, renders during redisplay.  Page turns still take the asynchronous path, so that there is one code path to test.
+
+* Failure modes to get right
+
+- Scrolling faster than poppler shows blank pages for a frame or two.  That is the accepted trade and what other viewers do.
+- ~pdf-view-image-size~ has around thirty callers that do arithmetic on its result; it may not start returning nil.  The non-blocking question is a separate predicate -- ~pdf-view-page-displayed-p~, already added by the mode-line work.
+- ~pdf-roll-pre-redisplay~ wraps itself in ~with-demoted-errors~ (=pdf-roll.el:247=), which will hide whatever goes wrong in the new path.  Remove it, or narrow it, as part of this.
+- ~pdf-view-after-change-page-hook~ is run from inside ~pdf-roll-pre-redisplay~ (=pdf-roll.el:301=) as well as from ~pdf-view-goto-page~ (=pdf-view.el:851=).  Third-party code on that hook therefore runs during redisplay today.  Moving the render out does not fix that by itself.
+
+* Staging
+
+One commit per unit, on a branch from =merged=.
+
+1. Fix the height under ~pdf-view-max-image-width~ in ~pdf-view-desired-image-size~.  Standalone bug fix.
+2. The geometry function, with the test against ~image-display-size~.
+3. pdf-roll takes its layout from the geometry function instead of from the rendered image.  No behaviour change.
+4. Page count and all page sizes in one composed query at open and at revert.
+5. The document generation counter, bumped from ~pdf-info-close-document-hook~.
+6. The asynchronous render: stale-reply guard, coalescing, one render in flight, behind a defcustom (built on by default).
+7. The three click handlers check the page's generation.
+8. Revert without touching the buffer text; old images stay until replaced.
+9. Narrow ~with-demoted-errors~ in ~pdf-roll-pre-redisplay~.
+10. Plain ~pdf-view-mode~ takes the asynchronous path, for page turns and for ~pdf-view-redisplay-some-windows~.
+11. Flip the default; remove the blocking call from the redisplay route; remove what only existed for a revert during a wait; revisit ~pdf-cache-image-limit~ and the prefetch list, which exist to paper over the blocking.
+
+* What this does not supersede
+
+Not the three mode-line branches.
+
+- =fix/info-query-no-timers-while-waiting= (upstream [[https://github.com/vedang/pdf-tools/pull/374][#374]]) is a floor under every synchronous wait, wherever it happens.  Its value drops once nothing waits during redisplay, but it does not become wrong.
+- =fix/misc-size-indication-no-error= stays, and is needed more: once a render is asynchronous, the mode line will meet a page with no image far more often, and it must answer without asking for one.
+- =fix/mode-line-no-server-query= is untouched by any of this.  It is about *queries* for the page count and the page labels, not about rendering.
+
+The rewrite addresses the render path, which is the larger half.  The three branches address the mode line, which is the half that crashed.
+
+* What was built
+
+On =feat/async-render=, in this order:
+
+| Commit | What |
+|--------+------|
+| =9837ef2= | =pdf-view-desired-image-size= reduces the height under =pdf-view-max-image-width= |
+| =0568a3a= | CI runs on the branch |
+| =fa96370= | the page image gets =:height= as well as =:width= |
+| =6b87d0b= | =pdf-view-displayed-page-size= |
+| =1f3db9f= | pdf-roll lays out from it |
+| =bf1de0e= | Emacs 27.1 is required |
+| =75e2938= | every page size is read at open and at revert |
+| =d4f17d1= | annotation changes keep the page size |
+| =ff9f320= | =pdf-view--document-generation= |
+| =5d1c28a= | a page showing a =space= is not displayed |
+| =c43ab71= | the asynchronous render, on by default |
+| =020a7b9= | clicks on a stale page do nothing |
+| =9760102= | roll mode reverts without replacing the buffer text |
+| =73d9d88= | an old image of another size is reshaped, not blanked |
+| =3f235fc= | isearch wraps backward in roll mode without measuring an image |
+
+Where it departs from the plan:
+
+- Emacs computed the height of a page image from the image it scaled, so the same page came out one pixel taller or shorter depending on what the image cache held.  The image is now given its height, and the geometry function is exact: it matched =image-display-size= for 2880 combinations of page, slice, rotation, width cap, display size, relief and cache state.
+- Page sizes are read in batches of 100, not in one composed query: sent all together, the replies to a document of 2000 pages exceeded =max-lisp-eval-depth=, because =tq-process-buffer= calls itself once per reply waiting.  The read takes 0.13 s for 2000 pages.
+- Hotspot functions are pluggable and ask the server themselves, so the asynchronous request asks for the image only, and the page is drawn with its map from a timer, where waiting is allowed.  Annotations cost one synchronous query per page drawn, outside redisplay.
+- An old image is kept after a revert only if it has the size the page is to have; otherwise it is reshaped -- the old data at the new width, height, rotation and slice, without a map -- because an image of another size moved the window off the layout.
+- The asynchronous render is on by default from its own commit.
+- =with-demoted-errors= in =pdf-roll-pre-redisplay= stays.  Emacs keeps a function on =pre-redisplay-functions= that signals and reports the error in =*Messages*= itself, so the wrapper only changes the wording, and the new code runs in a filter and a timer, not there.
+- =pdf-cache-image-limit= and prefetching are unchanged.  The prefetch reply handler makes synchronous queries from inside the process filter; they complete (0.010 s for the annotations of a page) and run only while Emacs is idle.
+- Plain =pdf-view-mode= is not made asynchronous.  It is to be replaced by a single-page view built on pdf-roll, which would make it the default mode; see below.
+- The blocking path, =pdf-roll--delay-revert= and the option =pdf-view-render-asynchronously= stay while the option can be nil, and go with plain mode.
+
+* Next: a single-page view in pdf-roll
+
+pdf-roll becomes the main mode, and the single-page experience a user option within it, built on the machinery above.  The work is its own branch and design document:
+
+1. Write the single-page experience down as a checklist: one page in view, fit-page centring it, SPC and DEL scrolling within the page then turning it, the wheel and =C-n=/=C-p= at the edges, horizontal scrolling, slices.
+2. Build the view in pdf-roll: only the current page shows, the margins are hidden, the vscroll is clamped to the page, an edge turns the page.
+3. Make pdf-roll the default, the single-page view an option, and keep the old path behind a variable for a while.
+4. Delete the old path, and the =pdf-view-roll-minor-mode= branches with it (37 across 8 files on 2026-10-04).
+
+Known roll-mode issues to check on the way: upstream #345, overlays with a =window= property clobbered by pdf-roll; upstream #339, very probably the isearch wrap fixed in =3f235fc=.
+

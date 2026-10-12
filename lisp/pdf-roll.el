@@ -119,9 +119,47 @@ If INHIBIT-SLICE-P is non-nil, disregard `pdf-view-current-slice'."
 (defun pdf-roll-display-image (image page &optional window inhibit-slice-p)
   "Display IMAGE for PAGE in WINDOW.
 If INHIBIT-SLICE-P is non-nil, disregard `pdf-view-current-slice'."
-  (let* ((image (pdf-roll-maybe-slice-image image window inhibit-slice-p))
-         (size (image-display-size image t))
-         (overlay (pdf-roll-page-overlay page window))
+  (let ((image (pdf-roll-maybe-slice-image image window inhibit-slice-p)))
+    (pdf-roll--display page window image (image-display-size image t))))
+
+(defun pdf-roll-display-placeholder (page window)
+  "Display a blank placeholder of the size of PAGE in WINDOW.
+It stands for the page until `pdf-view-request-page' has it drawn."
+  (let ((size (pdf-view-displayed-page-size page window)))
+    (pdf-roll--display page window
+                       `(space :width (,(car size)) :height (,(cdr size)))
+                       size)))
+
+(defun pdf-roll-reshape-image (display page window)
+  "Show the image of DISPLAY on PAGE in WINDOW at the size the page is to have.
+
+DISPLAY is what the page shows, the image or a slice of it.  The image
+data is given the width, height, rotation and slice the page has now;
+Emacs rotates, slices and scales it.  A rotation, and a slice at the
+same width, come out as the page will be drawn; a zoom comes out scaled,
+and a page whose size changed in a revert stretched, until the page is
+drawn anew.  The image has no map: its hotspots were computed for the
+old geometry.  Without image data, the page shows a placeholder."
+  (let ((data (image-property (if (eq (car-safe display) 'image)
+                                  display
+                                (assq 'image display))
+                              :data))
+        (size (pdf-view-desired-image-size page window)))
+    (if data
+        (pdf-roll-display-image
+         (pdf-view-create-image data
+           :width (car size)
+           :height (cdr size)
+           :rotation (or pdf-view--current-rotation 0)
+           :pointer 'arrow)
+         page window)
+      (pdf-roll-display-placeholder page window))))
+
+(defun pdf-roll--display (page window display size)
+  "Put DISPLAY, of SIZE in pixels, on the overlay of PAGE in WINDOW.
+Center it, and give the margin below it the same width.  Return the
+height."
+  (let* ((overlay (pdf-roll-page-overlay page window))
          (margin-pos (+ (pdf-roll-page-to-pos page) 2))
          (margin-overlay (pdf-roll--pos-overlay margin-pos window 'pdf-roll-margin))
          (offset (when (> (window-width window t) (car size))
@@ -133,7 +171,10 @@ If INHIBIT-SLICE-P is non-nil, disregard `pdf-view-current-slice'."
     ;; changed the buffer, so a redisplay follows that draws PAGE again; skip
     ;; it here rather than write to an overlay that is no longer there.
     (when overlay
-      (overlay-put overlay 'display image)
+      (overlay-put overlay 'pdf-view-generation pdf-view--document-generation)
+      (overlay-put overlay 'pdf-view-width
+                   (car (pdf-view-desired-image-size page window)))
+      (overlay-put overlay 'display display)
       (overlay-put overlay 'line-prefix offset))
     (when margin-overlay
       (overlay-put margin-overlay 'display `(space :width (,(car size)) :height (,pdf-roll-vertical-margin)))
@@ -141,8 +182,10 @@ If INHIBIT-SLICE-P is non-nil, disregard `pdf-view-current-slice'."
     (cdr size)))
 
 (defun pdf-roll-display-page (page window &optional force)
-  "Display PAGE in WINDOW.
-With FORCE non-nil display fetch page again even if it is already displayed."
+  "Display PAGE in WINDOW and return its height in pixels.
+With FORCE non-nil display fetch page again even if it is already displayed.
+The height is computed by `pdf-view-displayed-page-size', not measured
+on the image, so it does not depend on the image being there."
   ;; `pdf-roll-pre-redisplay' binds this as well, over the whole redisplay
   ;; pass.  It is bound here too because `pdf-roll-scroll-forward' and
   ;; `pdf-roll-scroll-backward' render as they walk from page to page, and run
@@ -150,9 +193,24 @@ With FORCE non-nil display fetch page again even if it is already displayed."
   (let* ((pdf-roll--delay-revert t)
          (overlay (pdf-roll-page-overlay page window))
          (display (and overlay (overlay-get overlay 'display))))
-    (if (or force (not display) (eq (car display) 'space))
-        (pdf-roll-display-image (pdf-view-create-page page window) page window)
-      (cdr (image-display-size display t)))))
+    (when (or force (not display) (eq (car display) 'space))
+      (if pdf-view-render-asynchronously
+          (progn
+            ;; A page that shows an image keeps it until the new one comes,
+            ;; and FORCE says it is out of date, whatever it was drawn for.
+            ;; An image of another size would put the window somewhere the
+            ;; layout does not expect, so it is shown at the size the page
+            ;; is to have, as `pdf-roll-reshape-image' makes it.
+            (if (pdf-view-page-displayed-p window page)
+                (progn
+                  (unless (equal (image-display-size display t)
+                                 (pdf-view-displayed-page-size page window))
+                    (pdf-roll-reshape-image display page window))
+                  (when force (overlay-put overlay 'pdf-view-width nil)))
+              (pdf-roll-display-placeholder page window))
+            (pdf-view-request-page page window))
+        (pdf-roll-display-image (pdf-view-create-page page window) page window)))
+    (cdr (pdf-view-displayed-page-size page window))))
 
 (defun pdf-roll-display-pages (page &optional window force pscrolling)
   "Display pages to fill the WINDOW starting from PAGE.
@@ -185,6 +243,7 @@ Replaces the display property of the overlay holding a page with a space."
     ;; A page that is on the list but has no overlay is one the document no
     ;; longer has: PAGES comes from the `displayed-pages' of WINDOW, which
     ;; outlives the overlays `pdf-roll-initialize' recreates on a revert.
+    (pdf-view-withdraw-page-request page window)
     (let ((overlay (pdf-roll-page-overlay page window)))
       (when overlay
         (overlay-put overlay 'display (get 'pdf-roll 'display))))))
@@ -422,7 +481,7 @@ the buffer may no longer hold an overlay for."
 
 (defun pdf-roll-initialize (&rest _args)
   "Fun to initialize `pdf-view-roll-minor-mode'.
-It is also added to `revert-buffer-function'."
+`pdf-roll-revert-buffer' calls it too, when the number of pages changed."
   (if pdf-roll--delay-revert
       ;; The timer has to be given the buffer: it runs with whatever buffer
       ;; happens to be current when it fires, and the work below erases the
@@ -438,6 +497,52 @@ It is also added to `revert-buffer-function'."
       (remove-overlays))
     (pdf-roll--forget-displayed-pages)
     (pdf-roll-new-window-function)))
+
+(defun pdf-roll-revert-buffer (&optional _ignore-auto noconfirm)
+  "Revert the buffer from its file, leaving the buffer text alone.
+
+NOCONFIRM is as in `revert-buffer'.  The buffer text is a space for
+each page and its margin, holding their overlays; inserting the file
+there, as `revert-buffer--default' does, would collapse the overlays and
+the pages on them.  Instead the document is closed and opened again, and
+if it has as many pages as before, every page keeps showing what it
+showed until it is drawn anew (see `pdf-view-request-page').  Clicks on
+it do nothing until then (see `pdf-view-page-stale-p').  If the number
+of pages changed, the overlays are made anew with
+`pdf-roll-initialize'.
+
+`revert-buffer' leaves `before-revert-hook' and `after-revert-hook' to
+the revert function, so they are run here."
+  (let ((file-name (buffer-file-name)))
+    (when (or noconfirm
+              (and (not (buffer-modified-p))
+                   (cl-some (lambda (regexp) (string-match-p regexp file-name))
+                            revert-without-query))
+              (yes-or-no-p (format "Revert buffer from file %s? " file-name)))
+      (run-hooks 'before-revert-hook)
+      ;; The server reads a copy of the file, made when the buffer visits it,
+      ;; if it cannot read the file itself: a remote, compressed or encrypted
+      ;; file.
+      (when pdf-view--buffer-file-name
+        (let ((copy pdf-view--buffer-file-name))
+          (with-temp-buffer
+            (set-buffer-multibyte nil)
+            (let ((coding-system-for-read 'binary))
+              (insert-file-contents file-name))
+            (write-region nil nil copy nil 'no-message))))
+      (pdf-info-close)
+      (pdf-view-decrypt-document)
+      (pdf-view-read-mode-line-data)
+      (pdf-cache-read-pagesizes)
+      (set-visited-file-modtime)
+      (set-buffer-modified-p nil)
+      ;; Two characters, each with an overlay, for every page and its
+      ;; margin, and a newline after each but the last.
+      (if (eq (pdf-cache-number-of-pages) (/ (1+ (buffer-size)) 4))
+          (pdf-roll-redisplay t)
+        (pdf-roll-initialize))
+      (run-hooks 'after-revert-hook)
+      t)))
 
 ;;;###autoload
 (define-minor-mode pdf-view-roll-minor-mode
@@ -466,8 +571,6 @@ It is also added to `revert-buffer-function'."
          (add-hook 'pre-redisplay-functions 'pdf-roll-pre-redisplay nil t)
          (add-hook 'pdf-roll-after-change-page-hook 'pdf-history-before-change-page-hook nil t)
 
-         (add-function :after (local 'revert-buffer-function) #'pdf-roll-initialize)
-
          (make-local-variable 'pdf-roll--state)
 
          (when (local-variable-p 'pixel-scroll-precision-mode)
@@ -482,8 +585,6 @@ It is also added to `revert-buffer-function'."
          (add-hook 'window-configuration-change-hook 'image-mode-reapply-winprops nil t)
          (add-hook 'window-configuration-change-hook 'pdf-view-redisplay-some-windows nil t)
          (add-hook 'image-mode-new-window-functions #'pdf-view-new-window-function nil t)
-
-         (remove-function (local 'revert-buffer-function) #'pdf-roll-initialize)
 
          (remove-hook 'pre-redisplay-functions 'pdf-roll-pre-redisplay t)
          (remove-hook 'pdf-roll-after-change-page-hook 'pdf-history-before-change-page-hook t)

@@ -84,12 +84,17 @@ an internal function and not meant to be directly used."
   "Clear the data cache when annotations are modified.
 
 FN is a closure as described in `pdf-annot-modified-functions'.
+The size of a page is kept: annotations do not change it, and redisplay
+needs it without asking the server (see `pdf-cache-read-pagesizes').
 
 Note: This is an internal function and not meant to be directly used."
-  (apply #'pdf-cache-clear-data-of-pages
-         (mapcar (lambda (a)
-                   (cdr (assq 'page a)))
-                 (funcall fn t))))
+  (when pdf-cache--data
+    (dolist (a (funcall fn t))
+      (let* ((page (cdr (assq 'page a)))
+             (size (assq 'pagesize (gethash page pdf-cache--data))))
+        (if size
+            (puthash page (list size) pdf-cache--data)
+          (remhash page pdf-cache--data))))))
 
 (defun pdf-cache--data-put (key value &optional page)
   "Put KEY with VALUE in the cache of PAGE, return value."
@@ -168,6 +173,37 @@ Make sure, not to modify its return value." command)))
 (define-pdf-cache-function boundingbox t)
 (define-pdf-cache-function textregions t)
 (define-pdf-cache-function pagesize t)
+
+(defconst pdf-cache--pagesizes-per-request 100
+  "How many page sizes `pdf-cache-read-pagesizes' asks for at a time.
+
+The replies to queries sent together are handled by `tq-process-buffer',
+which calls itself once for each reply already waiting, so too many at
+once exceed `max-lisp-eval-depth'.  Opening a document of 2000 pages did
+with all of them sent together.")
+
+(defun pdf-cache-read-pagesizes ()
+  "Read the size of every page of the document and cache it.
+
+The requests are sent in batches of `pdf-cache--pagesizes-per-request',
+and the server is waited on once per batch.  The size of a page decides
+how much room it takes in a window, and redisplay needs it before the
+page is drawn; but redisplay may not wait for the server, so the sizes
+are read here, when the document is opened and when it is reverted,
+where waiting is allowed."
+  (let ((pages (pdf-cache-number-of-pages))
+        (first 1))
+    (while (<= first pages)
+      (let ((last (min pages (+ first pdf-cache--pagesizes-per-request -1))))
+        (pdf-info-compose-queries
+            ((sizes (dotimes (i (1+ (- last first)))
+                      (pdf-info-pagesize (+ first i)))))
+          (let ((page first))
+            (dolist (size sizes)
+              (pdf-cache--data-put 'pagesize size page)
+              (setq page (1+ page)))))
+        (setq first (1+ last))))
+    nil))
 
 
 ;; * ================================================================== *

@@ -296,3 +296,178 @@ and redisplay would then scroll the window to page 1."
 (provide 'pdf-roll-test)
 
 ;;; pdf-roll-test.el ends here
+
+(ert-deftest pdf-roll-display-page-height-does-not-come-from-the-image ()
+  "The height a page takes is computed, not measured on its image.
+
+The image functions are replaced before the buffer is shown, because
+showing it draws the first page, and an image cannot be measured in
+batch."
+  (pdf-test-with-test-pdf
+    (let ((window (selected-window))
+          ;; The page is drawn while waiting.
+          (pdf-view-render-asynchronously nil)
+          drawn)
+      (cl-letf (((symbol-function 'pdf-view-displayed-page-size)
+                 (lambda (&rest _) '(500 . 700)))
+                ((symbol-function 'pdf-view-create-page)
+                 (lambda (&rest _) (setq drawn t) '(image :type png)))
+                ((symbol-function 'image-display-size)
+                 (lambda (&rest _) '(10 . 20)))
+                ((symbol-function 'image-size)
+                 (lambda (&rest _) '(10 . 20))))
+        (set-window-buffer window (current-buffer))
+        (pdf-view-mode)
+        (pdf-roll-new-window-function window)
+        (setq drawn nil)
+        (should (equal 700 (pdf-roll-display-page 1 window)))
+        (should drawn)
+        (setq drawn nil)
+        ;; Already displayed: nothing is drawn, the height is the same.
+        (should (equal 700 (pdf-roll-display-page 1 window)))
+        (should-not drawn)))))
+
+(defmacro pdf-roll-test-with-async-render (&rest body)
+  "Run BODY in test.pdf with pages rendered asynchronously.
+`requests' is the list of (PAGE . CALLBACK) sent to the server, newest
+first, and `drawn' the pages drawn.  The server answers when BODY calls
+a CALLBACK.  Timers run at once.  Images and pages measure 10x20."
+  (declare (indent 0) (debug t))
+  `(pdf-test-with-test-pdf
+     (let ((window (selected-window))
+           (pdf-view-render-asynchronously t)
+           requests drawn)
+       (cl-letf (((symbol-function 'pdf-info-renderpage)
+                  (lambda (page _width &rest _)
+                    (push (cons page pdf-info-asynchronous) requests)))
+                 ((symbol-function 'pdf-view-create-page)
+                  (lambda (page &rest _)
+                    (push page drawn)
+                    '(image :type png :data "old png" :map (hotspots))))
+                 ((symbol-function 'image-display-size)
+                  (lambda (&rest _) '(10 . 20)))
+                 ((symbol-function 'image-size)
+                  (lambda (&rest _) '(10 . 20)))
+                 ((symbol-function 'pdf-view-displayed-page-size)
+                  (lambda (&rest _) '(10 . 20)))
+                 ;; Emacs on CI has no PNG support.
+                 ((symbol-function 'pdf-view-image-type) (lambda () 'png))
+                 ((symbol-function 'create-image)
+                  (lambda (data type _data-p &rest props)
+                    `(image :type ,type :data ,data ,@props)))
+                 ((symbol-function 'run-at-time)
+                  (lambda (_time _repeat fn &rest args) (apply fn args))))
+         (set-window-buffer window (current-buffer))
+         (pdf-view-mode)
+         (pdf-roll-new-window-function window)
+         (setq-local pdf-view-roll-minor-mode t)
+         (pdf-cache-clear-images)
+         (setq drawn nil)
+         ,@body))))
+
+(ert-deftest pdf-roll-async-render-draws-a-placeholder-then-the-page ()
+  "Displaying a page asks for it once and draws it when the reply comes."
+  (pdf-roll-test-with-async-render
+    (let ((size (pdf-view-displayed-page-size 2 window)))
+      (should (equal (cdr size) (pdf-roll-display-page 2 window)))
+      (should (equal `(space :width (,(car size)) :height (,(cdr size)))
+                     (overlay-get (pdf-roll-page-overlay 2 window) 'display)))
+      (should (equal '(2) (mapcar #'car requests)))
+      (should-not drawn)
+      ;; A second redisplay before the reply asks nothing more.
+      (pdf-roll-display-page 2 window)
+      (should (equal '(2) (mapcar #'car requests)))
+      (funcall (cdar requests) nil "png data")
+      (should (equal '(2) drawn))
+      (should (pdf-view-page-displayed-p window 2)))))
+
+(ert-deftest pdf-roll-async-render-drops-a-reply-from-before-a-revert ()
+  "A reply for a document closed since is not drawn, nor cached."
+  (pdf-roll-test-with-async-render
+    (pdf-roll-display-page 2 window)
+    (run-hooks 'pdf-info-close-document-hook)
+    (funcall (cdar requests) nil "png data")
+    (should-not drawn)
+    (should-not (pdf-cache-lookup-image 2 1))))
+
+(ert-deftest pdf-roll-async-render-sends-one-at-a-time ()
+  "A page undisplayed before its request is sent is never asked for."
+  (pdf-roll-test-with-async-render
+    (pdf-roll-display-page 2 window)
+    (pdf-roll-display-page 3 window)
+    (pdf-roll-display-page 4 window)
+    (should (equal '(2) (mapcar #'car requests)))
+    (pdf-roll-undisplay-pages '(3) window)
+    (funcall (cdar requests) nil "png data")
+    (should (equal '(4 2) (mapcar #'car requests)))
+    (funcall (cdar requests) nil "png data")
+    (should (equal '(4 2) drawn))))
+
+(ert-deftest pdf-roll-revert-keeps-the-pages-until-drawn-anew ()
+  "A revert leaves the buffer text, the overlays and the images alone.
+The pages are stale until their new renders arrive."
+  (pdf-roll-test-with-async-render
+    (pdf-roll-display-page 2 window)
+    (funcall (cdar requests) nil "png data")
+    (let ((text (buffer-string))
+          (overlay (pdf-roll-page-overlay 2 window))
+          (image (overlay-get (pdf-roll-page-overlay 2 window) 'display)))
+      (pdf-view-revert-buffer nil t)
+      (should (equal text (buffer-string)))
+      (should (eq overlay (pdf-roll-page-overlay 2 window)))
+      (should (eq image (overlay-get overlay 'display)))
+      (should (pdf-view-page-stale-p window 2))
+      ;; The redisplay after the revert asks for the page again and keeps
+      ;; showing the old one meanwhile.
+      (setq requests nil drawn nil)
+      (pdf-roll-display-page 2 window t)
+      (should (eq image (overlay-get overlay 'display)))
+      (should (equal '(2) (mapcar #'car requests)))
+      (funcall (cdar requests) nil "png data")
+      (should (equal '(2) drawn))
+      (should-not (pdf-view-page-stale-p window 2)))))
+
+(ert-deftest pdf-roll-revert-rebuilds-the-overlays-if-the-pages-changed ()
+  "A revert to a document with another number of pages starts afresh."
+  (pdf-roll-test-with-async-render
+    (let ((overlay (pdf-roll-page-overlay 1 window)))
+      (cl-letf (((symbol-function 'pdf-cache-number-of-pages) (lambda () 7))
+                ((symbol-function 'pdf-cache-read-pagesizes) #'ignore))
+        (pdf-view-revert-buffer nil t)
+        (should (equal (1- (* 4 7)) (buffer-size)))
+        (should-not (eq overlay (pdf-roll-page-overlay 1 window)))))))
+
+(ert-deftest pdf-roll-async-render-reshapes-an-image-of-another-size ()
+  "A page whose image no longer has its size shows it reshaped meanwhile.
+An image of another size would move the window off the layout."
+  (pdf-roll-test-with-async-render
+    (pdf-roll-display-page 2 window)
+    (funcall (cdar requests) nil "png data")
+    ;; Otherwise the page is drawn again at once, from the cache.
+    (pdf-cache-clear-images)
+    (let ((pdf-view--current-rotation 90)
+          (size (pdf-view-desired-image-size 2 window)))
+      (cl-letf (((symbol-function 'pdf-view-displayed-page-size)
+                 (lambda (&rest _) '(20 . 10))))
+        (pdf-roll-display-page 2 window t)
+        (let ((image (overlay-get (pdf-roll-page-overlay 2 window) 'display)))
+          (should (equal "old png" (image-property image :data)))
+          (should (equal (car size) (image-property image :width)))
+          (should (equal (cdr size) (image-property image :height)))
+          (should (equal 90 (image-property image :rotation)))
+          (should-not (image-property image :map)))
+        ;; It is still drawn anew.
+        (should (equal '(2 2) (mapcar #'car requests)))))))
+
+(ert-deftest pdf-roll-isearch-wraps-backward-to-the-end-of-the-last-page ()
+  "Wrapping backward shows the end of the last page, placeholder or not."
+  (require 'pdf-isearch)
+  (pdf-roll-test-with-async-render
+    (cl-letf (((symbol-function 'pdf-view-displayed-page-size)
+               (lambda (&rest _) '(10 . 5000))))
+      (pdf-view-goto-page 2 window)
+      (let ((isearch-forward nil))
+        (pdf-isearch-wrap-function))
+      (should (equal 6 (pdf-view-current-page window)))
+      (should (equal (- 5000 (window-text-height window t))
+                     (image-mode-window-get 'vscroll window))))))

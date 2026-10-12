@@ -346,3 +346,132 @@ processes' filters and sentinels in the middle of that redisplay."
       (cl-letf (((symbol-function 'image-mode-window-get)
                  (lambda (prop &optional _w) (when (eq prop 'page) 3))))
         (should (equal " P3/???" (pdf-test-mode-line-position)))))))
+
+(ert-deftest pdf-view-desired-image-size-keeps-the-aspect-under-the-cap ()
+  "Capping the width at `pdf-view-max-image-width' reduces the height too."
+  (pdf-test-with-test-pdf
+    (pdf-view-mode)
+    (cl-letf (((symbol-function 'pdf-cache-pagesize) (lambda (_) '(600 . 800))))
+      (let ((pdf-view-display-size 2.0))
+        (let ((pdf-view-max-image-width nil))
+          (should (equal '(1200 . 1600) (pdf-view-desired-image-size 1))))
+        (let ((pdf-view-max-image-width 600))
+          (should (equal '(600 . 800) (pdf-view-desired-image-size 1))))))))
+
+(ert-deftest pdf-view-create-page-gives-emacs-the-height ()
+  "The image gets the height epdfinfo renders, not one Emacs computes.
+
+At 900 pixels a 612x792 page is 1164.7 rows high, which epdfinfo rounds
+to 1165.  `create-image' and `pdf-view-image-type' are replaced because
+Emacs on CI lacks PNG support."
+  (pdf-test-with-test-pdf
+    (pdf-view-mode)
+    (let (props)
+      (cl-letf (((symbol-function 'pdf-cache-pagesize) (lambda (_) '(612 . 792)))
+                ((symbol-function 'pdf-cache-renderpage) (lambda (&rest _) "data"))
+                ((symbol-function 'pdf-view-image-type) (lambda () 'png))
+                ((symbol-function 'create-image)
+                 (lambda (_data _type _data-p &rest p) (setq props p))))
+        (let ((pdf-view-display-size 2.0)
+              (pdf-view-max-image-width 900))
+          (should (equal '(900 . 1165) (pdf-view-desired-image-size 1)))
+          (pdf-view-create-page 1)
+          (should (equal 900 (plist-get props :width)))
+          (should (equal 1165 (plist-get props :height))))))))
+
+(ert-deftest pdf-view-displayed-page-size-applies-relief-rotation-and-slice ()
+  "The displayed size follows the image through relief, rotation and slice.
+
+The sizes are those a graphical Emacs 32.0.50 displayed for the same
+settings; `image-display-size' cannot be called in batch."
+  (pdf-test-with-test-pdf
+    (pdf-view-mode)
+    (cl-letf (((symbol-function 'pdf-cache-pagesize) (lambda (_) '(600 . 800))))
+      (let ((pdf-view-display-size 1.0)
+            (pdf-view-max-image-width nil)
+            (pdf-view-image-relief 0)
+            (pdf-view--current-rotation 0))
+        (should (equal '(600 . 800) (pdf-view-displayed-page-size 1)))
+        (let ((pdf-view-image-relief 3))
+          (should (equal '(606 . 806) (pdf-view-displayed-page-size 1)))
+          (let ((pdf-view--current-rotation 90))
+            (should (equal '(806 . 606) (pdf-view-displayed-page-size 1)))
+            (setf (pdf-view-current-slice) '(0.1 0.2 0.5 0.6))
+            (unwind-protect
+                ;; 0.5 * 806 and 0.6 * 606 = 363.6
+                (should (equal '(403 . 364) (pdf-view-displayed-page-size 1)))
+              (setf (pdf-view-current-slice) nil))))
+        (let ((pdf-view--current-rotation 180))
+          (should (equal '(600 . 800) (pdf-view-displayed-page-size 1))))))))
+
+(ert-deftest pdf-view-page-sizes-are-read-at-open-and-revert ()
+  "After opening or reverting, no page size has to be asked for.
+
+Redisplay lays pages out from their sizes, and may not wait for the
+server."
+  (pdf-test-with-test-pdf
+    (pdf-view-mode)
+    (cl-flet ((sizes-asked ()
+                (let (queried)
+                  (cl-letf (((symbol-function 'pdf-info-query)
+                             (lambda (cmd &rest _) (push cmd queried) nil)))
+                    (dotimes (i (pdf-cache-number-of-pages))
+                      (pdf-cache-pagesize (1+ i))))
+                  queried)))
+      (should (equal 6 (pdf-cache-number-of-pages)))
+      (should-not (sizes-asked))
+      (pdf-view-revert-buffer nil t)
+      (should-not (sizes-asked))
+      (should (equal (pdf-info-pagesize 3) (pdf-cache-pagesize 3))))))
+
+(ert-deftest pdf-view-revert-moves-the-document-generation-on ()
+  "Each revert closes the document, and starts a new generation."
+  (pdf-test-with-test-pdf
+    (pdf-view-mode)
+    (let ((generation pdf-view--document-generation))
+      (pdf-view-revert-buffer nil t)
+      (should (equal (1+ generation) pdf-view--document-generation))
+      (pdf-view-revert-buffer nil t)
+      (should (equal (+ 2 generation) pdf-view--document-generation)))))
+
+(ert-deftest pdf-view-page-displayed-p-a-space-is-not-a-page ()
+  "In roll mode a page not drawn yet shows a `space', not an image."
+  (with-temp-buffer
+    (insert " ")
+    (let ((overlay (make-overlay 1 2))
+          (pdf-view-roll-minor-mode t))
+      (cl-letf (((symbol-function 'pdf-roll-page-overlay) (lambda (&rest _) overlay)))
+        (overlay-put overlay 'display '(space :width 25 :height 1000))
+        (should-not (pdf-view-page-displayed-p nil 1))
+        (overlay-put overlay 'display '(image :type png :width 10 :height 400))
+        (should (pdf-view-page-displayed-p nil 1))
+        ;; A sliced page.
+        (overlay-put overlay 'display '((slice 0 0 5 5) (image :type png :width 10 :height 400)))
+        (should (pdf-view-page-displayed-p nil 1))))))
+
+(ert-deftest pdf-view-page-stale-p-after-the-document-is-closed ()
+  "A page drawn before the document was closed is stale until drawn again."
+  (with-temp-buffer
+    (insert " ")
+    (let ((overlay (make-overlay 1 2))
+          (pdf-view-roll-minor-mode t)
+          (pdf-view--document-generation 3))
+      (cl-letf (((symbol-function 'pdf-roll-page-overlay) (lambda (&rest _) overlay)))
+        (overlay-put overlay 'pdf-view-generation 3)
+        (should-not (pdf-view-page-stale-p nil 1))
+        (pdf-view--next-document-generation)
+        (should (pdf-view-page-stale-p nil 1))
+        (overlay-put overlay 'pdf-view-generation 4)
+        (should-not (pdf-view-page-stale-p nil 1))))))
+
+(ert-deftest pdf-view-no-selection-on-a-stale-page ()
+  "Dragging on a page of a document since closed selects nothing."
+  (let ((event `(down-mouse-1 (,(selected-window) 1 (10 . 10) 0)))
+        tracked)
+    (with-temp-buffer
+      (cl-letf (((symbol-function 'pdf-util-track-mouse-dragging)
+                 (lambda (&rest _) (setq tracked t) nil))
+                ((symbol-function 'pdf-view-deactivate-region) #'ignore)
+                ((symbol-function 'pdf-view-page-stale-p) (lambda (&rest _) t)))
+        (pdf-view-mouse-set-region event)
+        (should-not tracked)))))
