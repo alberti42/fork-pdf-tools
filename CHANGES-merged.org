@@ -54,6 +54,7 @@ A mode-line construct is evaluated while Emacs is displaying, so it may neither 
 
 - fix(pdf-util): convert the page the window is showing.  ~pdf-annot-edit~ failed in a window that had only drawn the page in roll mode: =Wrong type argument: char-or-string-p, nil=.  (branch =fix/convert-page-displayed-image=)
 - fix: use ~when-let*~, which ~when-let~ became, and fix(pdf-roll): use ~if-let*~, which ~if-let~ became.  Emacs 31 made both obsolete.  (branch =fix/when-let-obsolete=)
+- fix(sync): signal a user-error when the buffer visits no file.  Forward search from a buffer that visits no file, such as a magit index buffer, failed with =Wrong type argument: stringp, nil=.  (branch =fix/sync-forward-no-file=)
 - feat(pdf-history): keep one provisional item while browsing a list.  While a follow mode moves the document, the history keeps one item for where browsing landed and replaces it on the next move, so =B= returns to the position you were reading.  This changes what the history records, so it will get its own pull request, after #371.  (branch =feat/history-provisional-entries=)
 
 * Features built on =merged=
