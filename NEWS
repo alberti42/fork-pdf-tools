@@ -17,6 +17,11 @@
   + Links, annotations and text selection do nothing on a page still showing the old document.
 - The size of every page is read when the document is opened and reverted, so a page takes its room in the window before it is drawn.
 
+** Documents held in memory
+- With poppler-glib 0.82 or later, epdfinfo reads a document into memory when opening it, at the size of its file.  Writing over the file -- a save, or LaTeX compiling it before the buffer is reverted -- no longer breaks the open document.
+- Saving no longer closes the document: the pages on screen, their images and the names of the annotations stay valid, and nothing is rendered again.
+- The document of a buffer that has shown in no window for ~pdf-view-close-idle-documents-after~ minutes is closed, unless the buffer has unsaved changes or its file changed on disk; the next request opens it again.
+
 ** Functionality improvements and fixes
 - The mouse wheel and the trackpad scroll by what they report, with ~pdf-roll-wheel-scroll~
   + Without ~pixel-scroll-precision-mode~, the pixels of a gesture add up and the page moves by whole lines; a gentle trackpad gesture, which macOS reports as no line at all, used to do nothing.
@@ -25,11 +30,13 @@
 - Isearch no longer signals "Invalid image specification" when it wraps backward.
 - A page whose width is capped by ~pdf-view-max-image-width~ keeps its proportions.
 - A page is shown at the same height whichever cached image it is drawn from.
+- After a save, text on the pages on screen can be selected and their annotations clicked; the pages stayed inert until redrawn.
 - ~pdf-view-mode~ turns ~display-line-numbers-mode~ off in its buffers, also under ~global-display-line-numbers-mode~; the hook the README recommended is no longer needed.
 
 ** Changes to options and commands
 - ~pdf-view-continuous~ is renamed ~pdf-view-turn-page-at-top-and-bottom~, which says what it does: scrolling past the bottom or the top of a page turns the page.  The old name is an obsolete alias.
 - New option ~pdf-view-render-asynchronously~, see above.
+- New option ~pdf-view-close-idle-documents-after~, 30 minutes by default; nil keeps documents open until their buffer is killed.
 - New option ~pdf-view-page-key-lines~, 5 by default: PageDown and PageUp scroll that many lines in the continuous view instead of turning the page; nil restores turning it.  In ~pdf-view-single-page-mode~ they turn the page.
 - ~RET~ is no longer bound; it was ~image-next-line~, a line scroll that never turned the page.
 - ~pdf-view-scroll-up-or-next-page~, ~pdf-view-scroll-down-or-previous-page~, ~pdf-view-next-line-or-next-page~ and ~pdf-view-previous-line-or-previous-page~ are obsolete aliases of ~pdf-roll-scroll-screen-forward~, ~pdf-roll-scroll-screen-backward~, ~pdf-roll-scroll-forward~ and ~pdf-roll-scroll-backward~.

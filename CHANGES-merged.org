@@ -63,6 +63,8 @@ These branches start from =merged=, not from =master=.  The NEWS section of vers
 
 - =feat/async-render=: pages are rendered without waiting for the server.  A page not rendered yet shows a blank placeholder of its size, and the page replaces it when the server has rendered it.  Reverting a document keeps the pages on screen until their new renders arrive.  The branch also requires Emacs 27.1.  Design in =dev/DESIGN-async-render.org=.
 - =feat/single-page-roll=, on top of =feat/async-render=: ~pdf-view-mode~ scrolls continuously, as ~pdf-view-roll-minor-mode~ did in 1.3.0.  New minor mode ~pdf-view-single-page-mode~ shows one page at a time, as ~pdf-view-mode~ did before.  ~pdf-view-roll-minor-mode~ is obsolete: it warns once per session and does nothing.  The mouse wheel and the trackpad scroll by what they report, and PageDown and PageUp scroll ~pdf-view-page-key-lines~ lines.  Design in =dev/DESIGN-single-page-roll.org=.
+- =fix/save-redraw-pages=: fix(view): draw the pages again whenever the document is closed.  After a save, the pages on screen stayed stale: text could not be selected and clicks on annotations did nothing.
+- =feat/documents-in-memory=, on top of =fix/save-redraw-pages=: with poppler-glib 0.82 or later, epdfinfo reads a document into memory when opening it, so writing over its file -- a save, or LaTeX compiling it before the revert -- no longer breaks the open document.  A save then keeps the document open: pages, cached images and annotation names stay valid.  New option ~pdf-view-close-idle-documents-after~ (30 minutes) closes the document of a buffer that has shown in no window that long.  Also fix(roll): a window that shows the buffer again after a close draws its pages anew.
 
 * Documentation
 
