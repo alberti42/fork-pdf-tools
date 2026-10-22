@@ -269,3 +269,27 @@ middle of a redisplay."
       ;; And it is only held off, not lost.
       (sit-for 0.1)
       (should fired))))
+
+(ert-deftest pdf-info-document-survives-its-file-written-over ()
+  "A document read into memory stays as it was opened, until closed."
+  (let* ((test-pdf (expand-file-name "test.pdf"))
+         (other-pdf (expand-file-name "encrypted.pdf"))
+         (dir (file-name-as-directory (make-temp-file "pdf-info-test-" t)))
+         (default-directory dir))
+    (unwind-protect
+        (progn
+          (copy-file test-pdf dir)
+          (pdf-test-with-test-pdf
+            (skip-unless (pdf-info-documents-in-memory-p))
+            (should (string-prefix-p "1" (pdf-info-gettext 1 '(0 0 1 1))))
+            ;; Write over the file in place, as `write-region' does.
+            (let ((coding-system-for-write 'binary))
+              (with-temp-buffer
+                (set-buffer-multibyte nil)
+                (insert-file-contents-literally other-pdf)
+                (write-region nil nil (expand-file-name "test.pdf" dir)
+                              nil 'silent)))
+            (dolist (page '(2 3 4 5))
+              (should (string-prefix-p (number-to-string page)
+                                       (pdf-info-gettext page '(0 0 1 1)))))))
+      (delete-directory dir t))))

@@ -1013,9 +1013,28 @@ document_open (const epdfinfo_t *ctx, const char *filename,
     return doc;
 
   doc = g_malloc0(sizeof (document_t));
+#ifdef HAVE_POPPLER_NEW_FROM_BYTES
+  /* Poppler reads a document opened from a file as it needs each part
+     of it, so the document breaks when the file is written over: by a
+     save, or by LaTeX compiling it again.  Read into memory, it stays as
+     it was opened until it is closed. */
+  uri = NULL;
+  {
+    gchar *contents;
+    gsize length;
+
+    if (g_file_get_contents (filename, &contents, &length, gerror))
+      {
+        GBytes *bytes = g_bytes_new_take (contents, length);
+        doc->pdf = poppler_document_new_from_bytes (bytes, passwd, gerror);
+        g_bytes_unref (bytes);
+      }
+  }
+#else
   uri = g_filename_to_uri (filename, NULL, gerror);
   if (uri != NULL)
     doc->pdf = poppler_document_new_from_file(uri, passwd, gerror);
+#endif
 
   if (NULL == doc->pdf)
     {
@@ -2035,9 +2054,14 @@ cmd_features (const epdfinfo_t *ctx, const command_arg_t *args)
     "no-writable-annotations",
 #endif
 #ifdef HAVE_POPPLER_ANNOT_MARKUP
-    "markup-annotations"
+    "markup-annotations",
 #else
-    "no-markup-annotations"
+    "no-markup-annotations",
+#endif
+#ifdef HAVE_POPPLER_NEW_FROM_BYTES
+    "documents-in-memory"
+#else
+    "no-documents-in-memory"
 #endif
   };
   int i;
