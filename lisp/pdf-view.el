@@ -311,8 +311,14 @@ moved on since.  See `pdf-view--next-document-generation'.")
 
 (defun pdf-view--next-document-generation ()
   "Count one more closing of the document of the buffer.
-It is on `pdf-info-close-document-hook'."
-  (setq pdf-view--document-generation (1+ pdf-view--document-generation)))
+It is on `pdf-info-close-document-hook'.
+
+The pages on screen are then stale, and clicks on them do nothing until
+they are drawn again (see `pdf-view-page-stale-p'), so every window
+showing the buffer draws them again, whatever closed the document: a
+revert, or a save."
+  (setq pdf-view--document-generation (1+ pdf-view--document-generation))
+  (pdf-view-redisplay t))
 
 (defvar-local pdf-view-active-region nil
   "The active region as a cons cell of page and list of edges.

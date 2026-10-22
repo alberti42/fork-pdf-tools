@@ -441,6 +441,35 @@ The pages are stale until their new renders arrive."
       (should (equal '(2) drawn))
       (should-not (pdf-view-page-stale-p window 2)))))
 
+(ert-deftest pdf-roll-save-draws-the-pages-anew ()
+  "A save closes the document, and the pages on screen are drawn again.
+Until they are, clicks on them do nothing (see `pdf-view-page-stale-p')."
+  (let* ((test-pdf (expand-file-name "test.pdf"))
+         (dir (file-name-as-directory (make-temp-file "pdf-roll-test-" t)))
+         (default-directory dir))
+    (unwind-protect
+        (progn
+          (copy-file test-pdf dir)
+          (pdf-roll-test-with-async-render
+            (let ((answered 0))
+              (cl-flet ((answer-all ()
+                          ;; Each answer sends the next request.
+                          (while (< answered (length requests))
+                            (funcall (cdr (nth (- (length requests) answered 1)
+                                               requests))
+                                     nil "png data")
+                            (cl-incf answered))))
+                (pdf-roll-pre-redisplay window)
+                (answer-all)
+                (should-not (pdf-view-page-stale-p window 1))
+                (set-buffer-modified-p t)
+                (save-buffer)
+                (should (pdf-view-page-stale-p window 1))
+                (pdf-roll-pre-redisplay window)
+                (answer-all)
+                (should-not (pdf-view-page-stale-p window 1))))))
+      (delete-directory dir t))))
+
 (ert-deftest pdf-roll-revert-rebuilds-the-overlays-if-the-pages-changed ()
   "A revert to a document with another number of pages starts afresh."
   (pdf-roll-test-with-async-render
