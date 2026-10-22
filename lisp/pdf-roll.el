@@ -295,7 +295,14 @@ overlays."
 
 (defun pdf-roll-redisplay (&optional window)
   "Analogue of `pdf-view-redisplay' for WINDOW.
-If WINDOW is t, redisplay every window showing the current buffer."
+If WINDOW is t, redisplay every window showing the current buffer, and
+have every other window that has shown it draw its pages anew when it
+shows the buffer again."
+  ;; Such a window keeps its state, and would find it unchanged.
+  (when (eq window t)
+    (dolist (win-st pdf-roll--state)
+      (when (consp win-st)
+        (setcdr win-st nil))))
   (dolist (win (cond ((eq window t) (get-buffer-window-list nil nil t))
                      ((windowp window) (list window))
                      (t (list (selected-window)))))
