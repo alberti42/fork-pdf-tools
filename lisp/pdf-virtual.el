@@ -464,10 +464,26 @@ PAGE should be a page-number."
   "Major mode in virtual PDF buffers."
   (setq-local write-contents-functions nil)
   (remove-hook 'kill-buffer-hook 'pdf-view-close-document t)
+  (add-hook 'kill-buffer-hook #'pdf-virtual-close-documents nil t)
   (setq-local header-line-format
               `(:eval (pdf-virtual-buffer-current-file)))
   (unless noninteractive
     (message (substitute-command-keys "Press \\[pdf-virtual-edit-mode] to edit."))))
+
+(defun pdf-virtual-close-documents ()
+  "Have the server close the documents of the buffer that no buffer visits.
+It is on `kill-buffer-hook'.  The server holds an open document in
+memory, at the size of its file, until it is closed.  A document that a
+buffer visits is left open: that buffer may hold annotations not saved
+yet.  The documents of a virtual PDF have no such changes, since it
+cannot change annotations.  Return immediately, as
+`pdf-view-close-document' does."
+  (when (pdf-info-running-p)
+    (let ((pdf-info-asynchronous 'ignore))
+      (dolist (file (cl-remove-if #'find-buffer-visiting
+                                  (pdf-virtual-document-filenames)))
+        (ignore-errors
+          (pdf-info-close file))))))
 
 ;;;###autoload
 (define-minor-mode pdf-virtual-global-minor-mode
