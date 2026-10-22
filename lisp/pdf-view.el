@@ -137,6 +137,20 @@ redisplay waits until the page is rendered."
   :group 'pdf-view
   :type 'boolean)
 
+(defcustom pdf-view-close-idle-documents-after 30
+  "Minutes after which the server closes the document of a hidden buffer.
+
+A server built with poppler-glib 0.82 or later holds each open document
+in memory, at the size of its file (see
+`pdf-info-documents-in-memory-p').  When a buffer has shown in no window
+for this many minutes, its document is closed, and the next request
+opens it again.  A buffer with unsaved changes, or whose file changed on
+disk since it was opened, keeps its document.  If nil, documents stay
+open until their buffer is killed."
+  :group 'pdf-view
+  :type '(choice (const :tag "Never" nil)
+                 (number :tag "Minutes")))
+
 (defface pdf-view-region
   '((((background dark)) (:inherit region))
     (((background light)) (:inherit region)))
@@ -319,6 +333,16 @@ showing the buffer draws them again, whatever closed the document: a
 revert, or a save."
   (setq pdf-view--document-generation (1+ pdf-view--document-generation))
   (pdf-view-redisplay t))
+
+(defvar-local pdf-view--last-shown nil
+  "When the buffer was last seen in a window, or nil.
+`pdf-view-close-idle-documents' keeps it.")
+
+(defvar-local pdf-view--idle-closed nil
+  "Non-nil if the document was closed since the buffer was last shown.")
+
+(defvar pdf-view--idle-timer nil
+  "The timer that runs `pdf-view-close-idle-documents' every minute.")
 
 (defvar-local pdf-view-active-region nil
   "The active region as a cons cell of page and list of edges.
@@ -557,6 +581,8 @@ PNG images in Emacs buffers."
   (add-hook 'write-contents-functions
             'pdf-view--write-contents-function nil t)
   (add-hook 'kill-buffer-hook 'pdf-view-close-document nil t)
+  (setq pdf-view--last-shown (current-time))
+  (pdf-view--start-idle-timer)
   (add-hook 'pdf-info-close-document-hook
             #'pdf-view--next-document-generation nil t)
   (add-hook 'pdf-info-close-document-hook #'pdf-view--render-forget nil t)
@@ -758,6 +784,52 @@ Optional parameters IGNORE-AUTO and NOCONFIRM are defined as in
 `revert-buffer'.  This is `pdf-roll-revert-buffer'."
   (interactive (list (not current-prefix-arg)))
   (pdf-roll-revert-buffer ignore-auto noconfirm))
+
+;; * ================================================================== *
+;; * Closing the documents of hidden buffers
+;; * ================================================================== *
+
+(defun pdf-view--start-idle-timer ()
+  "Run `pdf-view-close-idle-documents' every minute, unless it already runs."
+  (unless (memq pdf-view--idle-timer timer-list)
+    (setq pdf-view--idle-timer
+          (run-with-timer 60 60 #'pdf-view-close-idle-documents))))
+
+(defun pdf-view-close-idle-documents ()
+  "Close the documents of the buffers hidden for long enough.
+
+See `pdf-view-close-idle-documents-after'.  A buffer shown in a window
+counts as seen now.  A document is closed only while Emacs waits for
+input, so never while a request to the server waits for its answer.
+The caches of the buffer are kept, since its file has not changed: when
+the buffer shows again, its pages are drawn from the images it has, and
+the server is asked only for their hotspots."
+  (let ((buffers (cl-remove-if-not
+                  (lambda (buffer)
+                    (eq 'pdf-view-mode (buffer-local-value 'major-mode buffer)))
+                  (buffer-list))))
+    (if (null buffers)
+        (progn (cancel-timer pdf-view--idle-timer)
+               (setq pdf-view--idle-timer nil))
+      (dolist (buffer buffers)
+        (with-current-buffer buffer
+          (cond
+           ((get-buffer-window buffer t)
+            (setq pdf-view--last-shown (current-time)
+                  pdf-view--idle-closed nil))
+           ((and pdf-view-close-idle-documents-after
+                 (not pdf-view--idle-closed)
+                 pdf-view--last-shown
+                 (> (float-time (time-subtract nil pdf-view--last-shown))
+                    (* 60 pdf-view-close-idle-documents-after))
+                 (current-idle-time)
+                 (not (buffer-modified-p))
+                 (verify-visited-file-modtime)
+                 (pdf-info-running-p)
+                 (pdf-info-documents-in-memory-p))
+            (pdf-cache-keeping
+              (pdf-info-close))
+            (setq pdf-view--idle-closed t))))))))
 
 (defun pdf-view-close-document ()
   "Return immediately after closing document.

@@ -316,6 +316,19 @@ This function always returns nil."
   "Clear the image cache."
   (setq pdf-cache--image-cache nil))
 
+(defmacro pdf-cache-keeping (&rest body)
+  "Run BODY, then give the caches of the buffer back what they held before.
+For BODY that closes a document whose file has not changed: the sizes,
+the text and the images of its pages are still those of the file."
+  (declare (indent 0) (debug t))
+  (let ((data (make-symbol "data"))
+        (images (make-symbol "images")))
+    `(let ((,data (and pdf-cache--data (copy-hash-table pdf-cache--data)))
+           (,images pdf-cache--image-cache))
+       (prog1 (progn ,@body)
+         (setq pdf-cache--data ,data
+               pdf-cache--image-cache ,images)))))
+
 (defun pdf-cache-clear-images-if (fn)
   "Remove images from the cache according to FN.
 
