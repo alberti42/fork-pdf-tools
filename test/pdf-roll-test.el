@@ -441,34 +441,70 @@ The pages are stale until their new renders arrive."
       (should (equal '(2) drawn))
       (should-not (pdf-view-page-stale-p window 2)))))
 
+(defmacro pdf-roll-test-with-saved-copy (&rest body)
+  "Run BODY as `pdf-roll-test-with-async-render' does, on a copy of test.pdf.
+`answer-all' answers every request to render a page, and BODY may save."
+  (declare (indent 0) (debug t))
+  `(let* ((test-pdf (expand-file-name "test.pdf"))
+          (dir (file-name-as-directory (make-temp-file "pdf-roll-test-" t)))
+          (default-directory dir))
+     (unwind-protect
+         (progn
+           (copy-file test-pdf dir)
+           (pdf-roll-test-with-async-render
+             (let ((answered 0))
+               (cl-flet ((answer-all ()
+                           ;; Each answer sends the next request.
+                           (while (< answered (length requests))
+                             (funcall (cdr (nth (- (length requests) answered 1)
+                                                requests))
+                                      nil "png data")
+                             (cl-incf answered))))
+                 ,@body))))
+       (delete-directory dir t))))
+
 (ert-deftest pdf-roll-save-draws-the-pages-anew ()
-  "A save closes the document, and the pages on screen are drawn again.
-Until they are, clicks on them do nothing (see `pdf-view-page-stale-p')."
-  (let* ((test-pdf (expand-file-name "test.pdf"))
-         (dir (file-name-as-directory (make-temp-file "pdf-roll-test-" t)))
-         (default-directory dir))
-    (unwind-protect
-        (progn
-          (copy-file test-pdf dir)
-          (pdf-roll-test-with-async-render
-            (let ((answered 0))
-              (cl-flet ((answer-all ()
-                          ;; Each answer sends the next request.
-                          (while (< answered (length requests))
-                            (funcall (cdr (nth (- (length requests) answered 1)
-                                               requests))
-                                     nil "png data")
-                            (cl-incf answered))))
-                (pdf-roll-pre-redisplay window)
-                (answer-all)
-                (should-not (pdf-view-page-stale-p window 1))
-                (set-buffer-modified-p t)
-                (save-buffer)
-                (should (pdf-view-page-stale-p window 1))
-                (pdf-roll-pre-redisplay window)
-                (answer-all)
-                (should-not (pdf-view-page-stale-p window 1))))))
-      (delete-directory dir t))))
+  "A save that closes the document has the pages on screen drawn again.
+Until they are, clicks on them do nothing (see `pdf-view-page-stale-p').
+The save closes it when the server reads the file as it needs it."
+  (pdf-roll-test-with-saved-copy
+    (cl-letf (((symbol-function 'pdf-info-documents-in-memory-p) #'ignore))
+      (pdf-roll-pre-redisplay window)
+      (answer-all)
+      (should-not (pdf-view-page-stale-p window 1))
+      (set-buffer-modified-p t)
+      (save-buffer)
+      (should (pdf-view-page-stale-p window 1))
+      (pdf-roll-pre-redisplay window)
+      (answer-all)
+      (should-not (pdf-view-page-stale-p window 1)))))
+
+(ert-deftest pdf-roll-save-keeps-the-document-in-memory ()
+  "A save keeps a document the server holds in memory open.
+The pages stay current, nothing is rendered again, and the names of the
+annotations stay valid."
+  (pdf-roll-test-with-saved-copy
+    (skip-unless (pdf-info-documents-in-memory-p))
+    (skip-unless (pdf-info-writable-annotations-p))
+    (pdf-roll-pre-redisplay window)
+    (answer-all)
+    ;; Opened again, the document would name the annotations of the page
+    ;; anew from 0, without the gap the deleted one leaves.
+    (pdf-info-delannot (alist-get 'id (car (pdf-info-getannots 3))))
+    (pdf-info-addannot 3 '(0.1 0.1 0.5 0.15) 'highlight)
+    (let ((generation pdf-view--document-generation)
+          (rendered (length requests))
+          (keys (mapcar (lambda (a) (alist-get 'id a)) (pdf-info-getannots 3))))
+      (should (= 2 (length keys)))
+      (set-buffer-modified-p t)
+      (save-buffer)
+      (should-not (buffer-modified-p))
+      (should (eq generation pdf-view--document-generation))
+      (should-not (pdf-view-page-stale-p window 1))
+      (pdf-roll-pre-redisplay window)
+      (should (= rendered (length requests)))
+      (dolist (key keys)
+        (should (eq key (alist-get 'id (pdf-info-getannot key))))))))
 
 (ert-deftest pdf-roll-revert-rebuilds-the-overlays-if-the-pages-changed ()
   "A revert to a document with another number of pages starts afresh."

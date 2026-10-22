@@ -736,7 +736,14 @@ has put the document in the buffer for Emacs to write."
             ;; file.
             (when pdf-view--buffer-file-name
               (copy-file tempfile pdf-view--buffer-file-name t))
-            (pdf-info-close pdf-view--server-file-name)
+            ;; A server that reads the file as it needs each part of the
+            ;; document would read the saved file at the offsets of the
+            ;; old one, so the document is closed and opened again.  One
+            ;; that holds the document in memory already has what the
+            ;; file now holds, and the pages, their images and the names
+            ;; of the annotations all stay valid.
+            (unless (pdf-info-documents-in-memory-p)
+              (pdf-info-close pdf-view--server-file-name))
             (when written
               (set-buffer-modified-p nil)
               (clear-visited-file-modtime)))
