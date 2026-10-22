@@ -496,3 +496,53 @@ server."
             (run-hooks 'post-command-hook)
             (should display-line-numbers-mode)))
       (global-display-line-numbers-mode (if global 1 -1)))))
+
+(defmacro pdf-view-test-with-hidden-pdf (&rest body)
+  "Run BODY in test.pdf, hidden for an hour while Emacs is idle.
+The buffer has a page size and an image in its caches."
+  (declare (indent 0) (debug t))
+  `(pdf-test-with-test-pdf
+     (pdf-view-mode)
+     (skip-unless (pdf-info-documents-in-memory-p))
+     (pdf-cache-pagesize 1)
+     (pdf-cache-put-image 1 100 "png data")
+     (setq pdf-view--last-shown (time-subtract nil 3600))
+     (cl-letf (((symbol-function 'current-idle-time) (lambda () '(0 1 0 0)))
+               ((symbol-function 'get-buffer-window) #'ignore))
+       ,@body)))
+
+(ert-deftest pdf-view-close-idle-documents-closes-a-hidden-one ()
+  "The document of a buffer hidden for long enough is closed, once.
+The caches are kept, as the file has not changed."
+  (pdf-view-test-with-hidden-pdf
+    (let ((generation pdf-view--document-generation))
+      (pdf-view-close-idle-documents)
+      (should (= (1+ generation) pdf-view--document-generation))
+      (should pdf-view--idle-closed)
+      (should (equal "png data" (pdf-cache-lookup-image 1 100)))
+      (should (car (pdf-cache--data-get 'pagesize 1)))
+      (pdf-view-close-idle-documents)
+      (should (= (1+ generation) pdf-view--document-generation)))))
+
+(ert-deftest pdf-view-close-idle-documents-keeps-what-must-stay ()
+  "A shown, a modified, or a recently hidden buffer keeps its document,
+and so does one whose file changed on disk."
+  (pdf-view-test-with-hidden-pdf
+    (let ((generation pdf-view--document-generation))
+      (set-buffer-modified-p t)
+      (pdf-view-close-idle-documents)
+      (set-buffer-modified-p nil)
+      (cl-letf (((symbol-function 'verify-visited-file-modtime) #'ignore))
+        (pdf-view-close-idle-documents))
+      (let ((pdf-view-close-idle-documents-after 120))
+        (pdf-view-close-idle-documents))
+      (let ((pdf-view-close-idle-documents-after nil))
+        (pdf-view-close-idle-documents))
+      (cl-letf (((symbol-function 'current-idle-time) #'ignore))
+        (pdf-view-close-idle-documents))
+      (should (= generation pdf-view--document-generation))
+      (cl-letf (((symbol-function 'get-buffer-window) (lambda (&rest _) t)))
+        (pdf-view-close-idle-documents))
+      (should (< (float-time (time-subtract nil pdf-view--last-shown)) 60))
+      (pdf-view-close-idle-documents)
+      (should (= generation pdf-view--document-generation)))))

@@ -1022,6 +1022,13 @@ A No-op, if BUFFER has not running server instance."
 (defun pdf-info-markup-annotations-p ()
   (not (null (memq 'markup-annotations (pdf-info-features)))))
 
+(defun pdf-info-documents-in-memory-p ()
+  "Return non-nil if the server reads a document into memory on opening it.
+Such a document stays as it was opened when its file is written over,
+until it is closed.  Otherwise the server reads the file as it needs
+each part of it, and must close the document before the file changes."
+  (not (null (memq 'documents-in-memory (pdf-info-features)))))
+
 (defmacro pdf-info-assert-writable-annotations ()
   `(unless (memq 'writable-annotations (pdf-info-features))
      (error "Writing annotations is not supported by this version of epdfinfo")))
