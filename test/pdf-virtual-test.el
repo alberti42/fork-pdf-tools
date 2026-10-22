@@ -70,6 +70,21 @@
   (with-pdf-virtual-test-buffer
    (should (progn (pdf-info-close) t))))
 
+(ert-deftest pdf-virtual-kill-closes-the-documents ()
+  "Killing a virtual PDF buffer closes the documents no buffer visits."
+  (pdf-info-process-assert-running t)
+  ;; Not `with-temp-buffer': it makes a buffer that runs no
+  ;; `kill-buffer-hook'.
+  (with-current-buffer (generate-new-buffer "vpdf")
+    (insert ";; %VPDF 1.0\n\n")
+    (let (print-length)
+      (pp pdf-virtual-test-document (current-buffer)))
+    (pdf-virtual-view-mode)
+    (pdf-info-number-of-pages)
+    (kill-buffer))
+  ;; The document was closed already, so closing it again finds nothing.
+  (should-not (pdf-info-close (expand-file-name "test.pdf"))))
+
 (ert-deftest pdf-virtual-metadata ()
   (with-pdf-virtual-test-buffer
    (should (consp (pdf-info-metadata)))))
