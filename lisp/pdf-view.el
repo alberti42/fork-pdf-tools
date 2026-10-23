@@ -140,9 +140,8 @@ redisplay waits until the page is rendered."
 (defcustom pdf-view-close-idle-documents-after 30
   "Minutes after which the server closes the document of a hidden buffer.
 
-A server built with poppler-glib 0.82 or later holds each open document
-in memory, at the size of its file (see
-`pdf-info-documents-in-memory-p').  When a buffer has shown in no window
+The server holds each open document in memory, at the size of its file
+(see `pdf-info-documents-in-memory-p').  When a buffer has shown in no window
 for this many minutes, its document is closed, and the next request
 opens it again.  A buffer with unsaved changes, or whose file changed on
 disk since it was opened, keeps its document.  If nil, documents stay
