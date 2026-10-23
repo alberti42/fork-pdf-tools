@@ -65,3 +65,12 @@
           (should (numberp (pdf-info-number-of-pages temp)))))
     (when (file-exists-p temp)
       (delete-file temp))))
+
+(ert-deftest pdf-view-mode-map-no-image-zoom ()
+  "Test that no key of `pdf-view-mode-map' resizes one page's image."
+  (dolist (key '([C-wheel-up] [C-wheel-down] [C-mouse-4] [C-mouse-5]))
+    (should (eq (lookup-key pdf-view-mode-map key) #'ignore)))
+  (should (eq (command-remapping 'image-increase-size nil pdf-view-mode-map)
+              'pdf-view-enlarge))
+  (should (eq (command-remapping 'image-decrease-size nil pdf-view-mode-map)
+              'pdf-view-shrink)))
