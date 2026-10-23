@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         # Ubuntu 24.04 has poppler 24.02, and 26.04 has 26.01: both open
-        # documents with poppler_document_new_from_data, macOS with
+        # documents with poppler_document_new_from_stream, macOS with
         # poppler_document_new_from_bytes (see server/epdfinfo.c).
         os: ['ubuntu-24.04']
         emacs-version:
