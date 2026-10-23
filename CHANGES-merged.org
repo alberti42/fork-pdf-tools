@@ -80,3 +80,4 @@ These branches start from =merged=, not from =master=.  The NEWS section of vers
 - ci(windows): drop the MSYS2 Emacs package, which no longer exists.  (branch =fix/ci-windows-msys2-emacs=)
 - ci: build the package tar on the Emacs snapshot again, by giving cask an Emacs whose ~current-time~ still returns a list.  The one-line fix for cask itself is [[https://github.com/cask/cask/pull/608][cask#608]].  (branch =fix/ci-snapshot-cask-time-format=)
 - ci: use the actions that run on Node.js 24 (=actions/checkout@v7=, =actions/upload-artifact@v7=), and ci(windows): build in the UCRT64 environment, since MSYS2 has deprecated MINGW64.  (branch =ci/actions-node24=)
+- ci: also test on Ubuntu 26.04 (poppler 26.01), with Emacs 31.1, and name Ubuntu 24.04 (poppler 24.02) explicitly instead of ubuntu-latest.  (branch =ci/ubuntu-26.04=)
