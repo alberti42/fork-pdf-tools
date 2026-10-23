@@ -213,7 +213,7 @@ that copy has to be given the saved document too."
   "The mock key the encrypted-document test encrypts to.")
 
 (defconst pdf-view-test-gpg-fingerprint
-  "3B19520851A05B7873843D3DBAB0869C7E18F8F7"
+  "E71DBB459C09E936E87ACF5B1DA9F0D26402E784"
   "Fingerprint of the key in test/gpg, so its owner trust can be set.
 Without that epa stops to ask whether an untrusted key may be used.")
 

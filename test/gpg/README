@@ -4,7 +4,10 @@ which is the only way to exercise the epa path without a pinentry.
 
     pdf-tools test key (no passphrase, for tests only)
     <pdf-tools-test@example.invalid>
-    ed25519/BAB0869C7E18F8F7
+    rsa2048/1DA9F0D26402E784, with an rsa2048 subkey for encryption
+
+RSA, because GnuPG 2.5.24 imports the secret part of a cv25519 subkey
+under a keygrip it then does not look it up by, so it cannot decrypt.
 
 It protects nothing and is known to everyone who can read this repository.
 Do not use it for anything.  The tests import it into a temporary GNUPGHOME
