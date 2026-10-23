@@ -67,10 +67,14 @@
       (delete-file temp))))
 
 (ert-deftest pdf-view-mode-map-no-image-zoom ()
-  "Test that no key of `pdf-view-mode-map' resizes one page's image."
+  "Test that no key of `pdf-view-mode-map' changes one page's image."
   (dolist (key '([C-wheel-up] [C-wheel-down] [C-mouse-4] [C-mouse-5]))
     (should (eq (lookup-key pdf-view-mode-map key) #'ignore)))
   (should (eq (command-remapping 'image-increase-size nil pdf-view-mode-map)
               'pdf-view-enlarge))
   (should (eq (command-remapping 'image-decrease-size nil pdf-view-mode-map)
-              'pdf-view-shrink)))
+              'pdf-view-shrink))
+  (dolist (command '(image-rotate image-flip-horizontally
+                     image-flip-vertically image-crop image-cut))
+    (should (eq (command-remapping command nil pdf-view-mode-map)
+                'undefined))))

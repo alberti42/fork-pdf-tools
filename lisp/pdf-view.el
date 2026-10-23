@@ -348,14 +348,18 @@ regarding display of the region in the later function.")
     (define-key map "="               'pdf-view-enlarge)
     (define-key map "-"               'pdf-view-shrink)
     (define-key map "0"               'pdf-view-scale-reset)
-    ;; The image commands of the parent map resize the image of one
-    ;; page, behind pdf-view's back: that page keeps its size until it
-    ;; is drawn again.  On macOS, a touch of the trackpad with Control
+    ;; The image commands of the parent map resize, rotate, flip or
+    ;; crop the image of one page, behind pdf-view's back: that page
+    ;; keeps the change until it is drawn again, and the document does
+    ;; not record it.  On macOS, a touch of the trackpad with Control
     ;; held sends C-<wheel-up> or C-<wheel-down>.
     (define-key map [remap image-increase-size] 'pdf-view-enlarge)
     (define-key map [remap image-decrease-size] 'pdf-view-shrink)
     (dolist (key '([C-wheel-up] [C-wheel-down] [C-mouse-4] [C-mouse-5]))
       (define-key map key #'ignore))
+    (dolist (command '(image-rotate image-flip-horizontally
+                       image-flip-vertically image-crop image-cut))
+      (define-key map (vector 'remap command) #'undefined))
     ;; Fit the image to the window
     (define-key map "W"               'pdf-view-fit-width-to-window)
     (define-key map "H"               'pdf-view-fit-height-to-window)
