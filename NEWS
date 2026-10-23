@@ -18,7 +18,7 @@
 - The size of every page is read when the document is opened and reverted, so a page takes its room in the window before it is drawn.
 
 ** Documents held in memory
-- With poppler-glib 0.82 or later, epdfinfo reads a document into memory when opening it, at the size of its file.  Writing over the file -- a save, or LaTeX compiling it before the buffer is reverted -- no longer breaks the open document.
+- epdfinfo reads a document into memory when opening it, at the size of its file.  Writing over the file -- a save, or LaTeX compiling it before the buffer is reverted -- no longer breaks the open document.
 - Saving no longer closes the document: the pages on screen, their images and the names of the annotations stay valid, and nothing is rendered again.
 - The document of a buffer that has shown in no window for ~pdf-view-close-idle-documents-after~ minutes is closed, unless the buffer has unsaved changes or its file changed on disk; the next request opens it again.
 
