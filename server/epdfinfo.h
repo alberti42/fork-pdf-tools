@@ -201,10 +201,6 @@ typedef struct
 typedef struct
 {
   PopplerDocument *pdf;
-  /* The bytes of the file, which poppler_document_new_from_data reads
-     until the document is freed.  NULL with poppler_document_new_from_bytes,
-     which keeps its own reference. */
-  gchar *contents;
   char *filename;
   char *passwd;
   struct
