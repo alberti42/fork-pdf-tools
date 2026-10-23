@@ -176,7 +176,6 @@ free_document (document_t *doc)
       g_free (doc->annotations.pages);
     }
   g_object_unref (doc->pdf);
-  g_free (doc->contents);
   g_free (doc);
 }
 
@@ -1014,6 +1013,7 @@ document_open (const epdfinfo_t *ctx, const char *filename,
     return doc;
 
   doc = g_malloc0(sizeof (document_t));
+#if defined HAVE_POPPLER_NEW_FROM_BYTES || defined HAVE_POPPLER_NEW_FROM_STREAM
   /* Poppler reads a document opened from a file as it needs each part
      of it, so the document breaks when the file is written over: by a
      save, or by LaTeX compiling it again.  Read into memory, it stays as
@@ -1025,31 +1025,28 @@ document_open (const epdfinfo_t *ctx, const char *filename,
 
     if (g_file_get_contents (filename, &contents, &length, gerror))
       {
-#ifdef HAVE_POPPLER_NEW_FROM_BYTES
         GBytes *bytes = g_bytes_new_take (contents, length);
+#ifdef HAVE_POPPLER_NEW_FROM_BYTES
         doc->pdf = poppler_document_new_from_bytes (bytes, passwd, gerror);
-        g_bytes_unref (bytes);
 #else
-        /* Before poppler 26.02, poppler_document_new_from_bytes crashes
-           when the password is wrong: it retries with a copy of its
-           stream cast to the wrong type, a null pointer. */
-        if (length > G_MAXINT)
-          g_set_error (gerror, G_FILE_ERROR, G_FILE_ERROR_FAILED,
-                       "File too large: %s", filename);
-        else
-          {
-            G_GNUC_BEGIN_IGNORE_DEPRECATIONS
-            doc->pdf = poppler_document_new_from_data (contents, (int) length,
-                                                       passwd, gerror);
-            G_GNUC_END_IGNORE_DEPRECATIONS
-          }
-        if (doc->pdf)
-          doc->contents = contents;
-        else
-          g_free (contents);
+        /* Before poppler 26.02, poppler_document_new_from_bytes and
+           poppler_document_new_from_data crash when the password is
+           wrong: they retry with a copy of their stream cast to a type
+           the copy does not have, a null pointer.  The copy of the
+           stream here is of the right type. */
+        GInputStream *stream = g_memory_input_stream_new_from_bytes (bytes);
+        doc->pdf = poppler_document_new_from_stream (stream, length, passwd,
+                                                     NULL, gerror);
+        g_object_unref (stream);
 #endif
+        g_bytes_unref (bytes);
       }
   }
+#else
+  uri = g_filename_to_uri (filename, NULL, gerror);
+  if (uri != NULL)
+    doc->pdf = poppler_document_new_from_file(uri, passwd, gerror);
+#endif
 
   if (NULL == doc->pdf)
     {
@@ -2073,7 +2070,11 @@ cmd_features (const epdfinfo_t *ctx, const command_arg_t *args)
 #else
     "no-markup-annotations",
 #endif
+#if defined HAVE_POPPLER_NEW_FROM_BYTES || defined HAVE_POPPLER_NEW_FROM_STREAM
     "documents-in-memory"
+#else
+    "no-documents-in-memory"
+#endif
   };
   int i;
   OK_BEGIN ();

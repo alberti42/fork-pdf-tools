@@ -20,12 +20,14 @@ HAVE_POPPLER_ANNOT_MARKUP="no (requires poppler-glib >= 0.26)"
 
 PKG_CHECK_MODULES([png], [libpng])
 PKG_CHECK_MODULES([glib], [glib-2.0])
+PKG_CHECK_MODULES([gio], [gio-2.0])
 PKG_CHECK_MODULES([poppler], [poppler])
 PKG_CHECK_MODULES([poppler_glib], [poppler-glib >= 0.16.0])
 PKG_CHECK_EXISTS([poppler-glib >= 0.19.4], [HAVE_POPPLER_ANNOT_WRITE=yes])
 PKG_CHECK_EXISTS([poppler-glib >= 0.22], [HAVE_POPPLER_FIND_OPTS=yes])
 PKG_CHECK_EXISTS([poppler-glib >= 0.26], [HAVE_POPPLER_ANNOT_MARKUP=yes])
 PKG_CHECK_EXISTS([poppler-glib >= 26.02], [HAVE_POPPLER_NEW_FROM_BYTES=yes])
+PKG_CHECK_EXISTS([poppler-glib >= 0.22], [HAVE_POPPLER_NEW_FROM_STREAM=yes])
 PKG_CHECK_MODULES([zlib], [zlib])
 
 AC_COMPILE_IFELSE(
@@ -62,6 +64,11 @@ fi
 if test "$HAVE_POPPLER_NEW_FROM_BYTES" = yes; then
   AC_DEFINE([HAVE_POPPLER_NEW_FROM_BYTES],1,
     [Define to 1 to open a document with poppler_document_new_from_bytes, which before poppler-glib 26.02 crashes on a wrong password.])
+fi
+
+if test "$HAVE_POPPLER_NEW_FROM_STREAM" = yes; then
+  AC_DEFINE([HAVE_POPPLER_NEW_FROM_STREAM],1,
+    [Define to 1 to open a document from memory with poppler_document_new_from_stream (requires poppler-glib >= 0.22).])
 fi
 
 AC_CANONICAL_HOST
