@@ -71,7 +71,7 @@
              ;; `pdf-view-mode' when `auto-mode-alist' says so, and the
              ;; previous test quit the server, which in batch is not
              ;; restarted without asking.
-             (pdf-info-quit)
+             (pdf-info-quit nil t)
              (pdf-info-process-assert-running t)
              (setq ,buffer (find-file-noselect (expand-file-name ,pdf-filename)))
              (with-current-buffer ,buffer ,@body))
@@ -86,7 +86,7 @@
              (unless (= 1 (point-max))
                (message ">>> %s <<<" (buffer-string))))
            (delete-file pdf-info-epdfinfo-error-filename))
-         (pdf-info-quit)))))
+         (pdf-info-quit nil t)))))
 
 (defmacro pdf-test-with-test-pdf (&rest body)
   `(pdf-test-with-pdf "test.pdf" ,@body))

@@ -96,7 +96,7 @@
 
 (ert-deftest pdf-info-quit ()
   (pdf-test-with-test-pdf
-    (pdf-info-quit)
+    (pdf-info-quit nil t)
     (let (pdf-info-restart-process-p)
       (should-error (pdf-info-open)))
     (let ((pdf-info-restart-process-p t))
@@ -324,8 +324,10 @@ middle of a redisplay."
     (set-buffer-modified-p t)
     (when (get-buffer "*Warnings*")
       (kill-buffer "*Warnings*"))
-    ;; Interactively, a modified PDF buffer keeps the server running.
-    (pdf-info-quit nil t)
+    ;; A modified PDF buffer keeps the server running.
+    (should-not (pdf-info-quit))
+    (should (pdf-info-running-p))
+    (should-not (pdf-info-kill))
     (should (pdf-info-running-p))
     (with-current-buffer "*Warnings*"
       (goto-char (point-min))
@@ -335,9 +337,21 @@ middle of a redisplay."
         (funcall (lookup-key (get-text-property (1- (point)) 'keymap)
                              (kbd "RET")))
         (should (eq (window-buffer (selected-window)) pdf-buffer))))
-    ;; From Lisp, it quits.
-    (pdf-info-quit)
-    (should-not (pdf-info-running-p))))
+    ;; FORCE quits.
+    (should (pdf-info-quit nil t))
+    (should-not (pdf-info-running-p))
+    ;; A local server is killed although another buffer is modified.
+    (with-temp-buffer
+      (pdf-info-make-local-server)
+      (should (pdf-info-running-p))
+      (should (pdf-info-kill-local-server))
+      (should-not (local-variable-p 'pdf-info--queue)))
+    ;; Not the local server of the modified buffer itself, unless forced.
+    (pdf-info-make-local-server)
+    (should-not (pdf-info-kill-local-server))
+    (should (local-variable-p 'pdf-info--queue))
+    (should (pdf-info-kill-local-server nil t))
+    (should-not (local-variable-p 'pdf-info--queue))))
 
 (ert-deftest pdf-info-render-options-per-request ()
   (pdf-test-with-test-pdf
@@ -351,7 +365,7 @@ middle of a redisplay."
       ;; The options came with the request; the server keeps none.
       (should (equal 0 (plist-get (pdf-info-getoptions) :render/usecolors)))
       ;; A new server renders the same image.
-      (pdf-info-quit)
+      (pdf-info-quit nil t)
       (pdf-info-process-assert-running t)
       (should (equal themed (pdf-info-renderpage 1 100)))
       (pdf-info-set-render-options nil)
@@ -372,7 +386,7 @@ middle of a redisplay."
     (pdf-info-open nil "pdftool")
     (should (= 6 (pdf-info-number-of-pages)))
     ;; A new server opens the document with the password the buffer keeps.
-    (pdf-info-quit)
+    (pdf-info-quit nil t)
     (pdf-info-process-assert-running t)
     (should (= 6 (pdf-info-number-of-pages)))
     ;; So does a request after the document was closed.
