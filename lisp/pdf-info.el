@@ -94,7 +94,7 @@
   "Filename of the epdfinfo executable."
   :type 'file)
 
-(defconst pdf-info-epdfinfo-version "1.0.0"
+(defconst pdf-info-epdfinfo-version "1.1.0"
   "The version of epdfinfo these Lisp files expect.
 
 It is a version in Semantic Versioning 2.0.0, equal to
@@ -306,6 +306,10 @@ works with these files."
        (car (version-to-list pdf-info-epdfinfo-version)))
     'newer)))
 
+(defvar pdf-info--server-version nil
+  "The version of the running epdfinfo server, or nil.
+It is nil also for a server older than version 1.0.0.")
+
 (defvar pdf-info--epdfinfo-version-warned nil
   "The (PROGRAM . VERSION) pairs warned about in this session.")
 
@@ -313,7 +317,8 @@ works with these files."
   "Warn if `pdf-info-epdfinfo-program' is not the version expected.
 
 Warn once per program and version in a session.  The program is
-used anyway."
+used anyway.  Return the version of the program, as
+`pdf-info-epdfinfo-program-version' does."
   (let* ((version (pdf-info-epdfinfo-program-version))
          (problem (pdf-info-epdfinfo-version-problem version))
          (key (cons pdf-info-epdfinfo-program version)))
@@ -334,7 +339,8 @@ since.  Rebuild it with `M-x pdf-tools-install', then restart Emacs."
 files expect version %s, a lower major version.  Update the pdf-tools \
 package."
                  pdf-info-epdfinfo-program version
-                 pdf-info-epdfinfo-version))))))
+                 pdf-info-epdfinfo-version))))
+    version))
 
 (defun pdf-info-process-assert-running (&optional force)
   "Assert a running process.
@@ -367,7 +373,7 @@ error."
         (setq pdf-info-restart-process-p nil))
       (error "The epdfinfo server quit"))
     (pdf-info-check-epdfinfo)
-    (pdf-info-check-epdfinfo-version)
+    (setq pdf-info--server-version (pdf-info-check-epdfinfo-version))
     (let* ((process-connection-type)    ;Avoid 4096 Byte bug #12440.
            (default-directory "~")
            (proc (apply #'start-process
@@ -1722,7 +1728,8 @@ Return the data of the corresponding PNG image."
           (push value transformed)))
       (when commands
         (error "Keyword is missing a value: %s" (car commands)))
-      (nreverse transformed))))
+      (nconc (nreverse transformed)
+             (pdf-info--render-option-args file-or-buffer)))))
 
 (defun pdf-info-renderpage-text-regions (page width single-line-p
                                               &optional selection-style file-or-buffer
@@ -1799,48 +1806,99 @@ Returns a list \(LEFT TOP RIGHT BOT\)."
   (pdf-info-query
    'boundingbox
    (pdf-info--normalize-file-or-buffer file-or-buffer)
-   page))
+   page
+   (pdf-info--render-option-args file-or-buffer)))
 
 (defun pdf-info-getoptions (&optional file-or-buffer)
   (pdf-info-query
    'getoptions
    (pdf-info--normalize-file-or-buffer file-or-buffer)))
 
+(defvar-local pdf-info-render-options nil
+  "The render options of the document of this buffer.
+
+A plist of the `:render/' options `pdf-info-setoptions' takes.  Set
+it with `pdf-info-set-render-options'.  An epdfinfo server of
+version 1.1.0 or later receives these options with each request
+that renders a page of this buffer, so they need no state in the
+server.  nil means the server's defaults.")
+
+(defconst pdf-info--default-render-options
+  '(:render/usecolors 0 :render/printed nil)
+  "The render options sent when `pdf-info-render-options' is nil.")
+
+(defun pdf-info--render-options-per-request-p ()
+  "Return non-nil if the server takes render options with each request.
+Start the server if it is not running, to learn its version."
+  (pdf-info-process-assert-running)
+  (and pdf-info--server-version
+       (not (version< pdf-info--server-version "1.1.0"))))
+
+(defun pdf-info--render-option-args (file-or-buffer)
+  "Return the render options to send with a request for FILE-OR-BUFFER.
+
+The options are `pdf-info-render-options' of FILE-OR-BUFFER if it
+is a buffer, else of the current buffer, as arguments for the
+server.  Return nil if the server is older than version 1.1.0."
+  (when (pdf-info--render-options-per-request-p)
+    (pdf-info--option-args
+     (or (buffer-local-value 'pdf-info-render-options
+                             (if (bufferp file-or-buffer)
+                                 file-or-buffer
+                               (current-buffer)))
+         pdf-info--default-render-options))))
+
+(defun pdf-info-set-render-options (options &optional buffer)
+  "Set the render options of BUFFER, by default the current buffer.
+
+OPTIONS is a plist as `pdf-info-render-options' holds.  If the
+server is older than version 1.1.0, also send them with
+`pdf-info-setoptions', since it does not take them with each
+request."
+  (with-current-buffer (or buffer (current-buffer))
+    (setq pdf-info-render-options options)
+    (unless (pdf-info--render-options-per-request-p)
+      (apply #'pdf-info-setoptions nil options))))
+
+(defun pdf-info--option-args (options)
+  "Return the document OPTIONS, a plist, as arguments for the server."
+  (unless (= (% (length options) 2) 0)
+    (error "Missing a option value"))
+  (let (soptions)
+    (while options
+      (let ((key (pop options))
+            (value (pop options)))
+        (unless (and (keywordp key)
+                     (not (eq key :)))
+          (error "Keyword expected: %s" key))
+        (cl-case key
+          ((:render/foreground :render/background)
+           (push (pdf-util-hexcolor value)
+                 soptions))
+          ((:render/printed)
+           (push (if value 1 0) soptions))
+          ((:render/gammabeforeinvert)
+           (push (if value 1 0) soptions))
+          ((:render/usecolors)
+           ;; 0 -> original color
+           ;; 1 -> recolor document to grayscale mapping black to
+           ;;      :render/foreground and white to :render/background
+           ;; 2 -> recolor document by inverting the perceived lightness
+           ;;      preserving hue
+           (push (if (and (integerp value) (> 3 value 0)) value 0)
+                 soptions))
+          (t (push value soptions)))
+        (push key soptions)))
+    soptions))
+
 (defun pdf-info-setoptions (&optional file-or-buffer &rest options)
   (when (symbolp file-or-buffer)
     (push file-or-buffer options)
     (setq file-or-buffer nil))
-  (unless (= (% (length options) 2) 0)
-    (error "Missing a option value"))
   (apply #'pdf-info-query
     'setoptions
     (pdf-info--normalize-file-or-buffer file-or-buffer)
-    (let (soptions)
-      (while options
-        (let ((key (pop options))
-              (value (pop options)))
-          (unless (and (keywordp key)
-                       (not (eq key :)))
-            (error "Keyword expected: %s" key))
-          (cl-case key
-            ((:render/foreground :render/background)
-             (push (pdf-util-hexcolor value)
-                   soptions))
-            ((:render/printed)
-             (push (if value 1 0) soptions))
-            ((:render/gammabeforeinvert)
-             (push (if value 1 0) soptions))
-            ((:render/usecolors)
-             ;; 0 -> original color
-             ;; 1 -> recolor document to grayscale mapping black to
-             ;;      :render/foreground and white to :render/background
-             ;; 2 -> recolor document by inverting the perceived lightness
-             ;;      preserving hue
-             (push (if (and (integerp value) (> 3 value 0)) value 0)
-                   soptions))
-            (t (push value soptions)))
-          (push key soptions)))
-      soptions)))
+    (pdf-info--option-args options)))
 
 
 

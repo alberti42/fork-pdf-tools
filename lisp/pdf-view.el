@@ -1602,21 +1602,57 @@ This tells the various modes to use their face's dark colors."
       (pdf-isearch-message
        (if pdf-view-dark-minor-mode "dark mode" "light mode")))))
 
+(defvar pdf-view-printer-minor-mode)
+(defvar pdf-view-midnight-minor-mode)
+(defvar pdf-view-themed-minor-mode)
+
+(defun pdf-view--render-options ()
+  "Return the render options of the minor modes of this buffer.
+
+The modes are `pdf-view-printer-minor-mode',
+`pdf-view-midnight-minor-mode' and `pdf-view-themed-minor-mode'.
+The colors of the midnight mode take precedence over those of the
+themed mode."
+  (append
+   (list :render/printed pdf-view-printer-minor-mode)
+   (cond
+    (pdf-view-midnight-minor-mode
+     (list :render/foreground (or (car pdf-view-midnight-colors) "black")
+           :render/background (or (cdr pdf-view-midnight-colors) "white")
+           :render/gamma pdf-view-midnight-gamma
+           :render/gammabeforeinvert pdf-view-midnight-gamma-before-invert
+           ;; 2 ignores the foreground and background and inverts the
+           ;; PDF, preserving hue; 1 uses them.
+           :render/usecolors (if pdf-view-midnight-invert 2 1)))
+    (pdf-view-themed-minor-mode
+     (list :render/foreground (face-foreground 'default nil)
+           :render/background (face-background 'default nil)
+           :render/usecolors 1))
+    (t
+     (list :render/usecolors 0)))))
+
+(defun pdf-view--update-render-options ()
+  "Set the render options of this buffer from its minor modes.
+
+While one of the modes is on, set them again after a save or a
+revert: an epdfinfo older than version 1.1.0 keeps them per
+document, and a save or a revert used to close it."
+  (pdf-info-set-render-options (pdf-view--render-options))
+  (if (or pdf-view-printer-minor-mode
+          pdf-view-midnight-minor-mode
+          pdf-view-themed-minor-mode)
+      (progn
+        (add-hook 'after-save-hook #'pdf-view--update-render-options nil t)
+        (add-hook 'after-revert-hook #'pdf-view--update-render-options nil t))
+    (remove-hook 'after-save-hook #'pdf-view--update-render-options t)
+    (remove-hook 'after-revert-hook #'pdf-view--update-render-options t)))
+
 (define-minor-mode pdf-view-printer-minor-mode
   "Display the PDF as it would be printed."
   :group 'pdf-view
   :lighter " Prn"
   (pdf-util-assert-pdf-buffer)
-  (let ((enable (lambda ()
-                  (pdf-info-setoptions :render/printed t))))
-    (cond
-     (pdf-view-printer-minor-mode
-      (add-hook 'after-save-hook enable nil t)
-      (add-hook 'after-revert-hook enable nil t))
-     (t
-      (remove-hook 'after-save-hook enable t)
-      (remove-hook 'after-revert-hook enable t))))
-  (pdf-info-setoptions :render/printed pdf-view-printer-minor-mode)
+  (pdf-view--update-render-options)
   (pdf-cache-clear-images)
   (pdf-view-redisplay t))
 
@@ -1628,44 +1664,15 @@ The colors are determined by the variable
   :group 'pdf-view
   :lighter " Mid"
   (pdf-util-assert-pdf-buffer)
-  ;; FIXME: Maybe these options should be passed stateless to pdf-info-renderpage ?
-  (let ((enable (lambda ()
-                  (pdf-info-setoptions
-                   :render/foreground (or (car pdf-view-midnight-colors) "black")
-                   :render/background (or (cdr pdf-view-midnight-colors) "white")
-                   :render/gamma pdf-view-midnight-gamma
-                   :render/gammabeforeinvert pdf-view-midnight-gamma-before-invert
-                   :render/usecolors
-                   (if pdf-view-midnight-invert
-                       ;; If midnight invert is enabled, pass "2" indicating
-                       ;; that :render/foreground and :render/background should
-                       ;; be ignored and to instead invert the PDF (preserving
-                       ;; hue)
-                       2
-                     ;; If invert is not enabled, pass "1" indictating that
-                     ;; :render/foreground and :render/background should be used
-                     1)))))
-    (cond
-     (pdf-view-midnight-minor-mode
-      (add-hook 'after-save-hook enable nil t)
-      (add-hook 'after-revert-hook enable nil t)
-      (funcall enable))
-     (t
-      (remove-hook 'after-save-hook enable t)
-      (remove-hook 'after-revert-hook enable t)
-      (pdf-info-setoptions
-       ;; Value "0" indicates that colors should remain unchanged
-       :render/usecolors 0))))
+  (pdf-view--update-render-options)
   (pdf-cache-clear-images)
   (pdf-view-redisplay t))
 
 (defun pdf-view-set-theme-background ()
-  "Set the buffer's color filter to correspond to the current Emacs theme."
+  "Set the buffer's color filter to correspond to the current Emacs theme.
+The filter applies while `pdf-view-themed-minor-mode' is on."
   (pdf-util-assert-pdf-buffer)
-  (pdf-info-setoptions
-   :render/foreground (face-foreground 'default nil)
-   :render/background (face-background 'default nil)
-   :render/usecolors 1))
+  (pdf-view--update-render-options))
 
 (defun pdf-view-refresh-themed-buffer (&optional get-theme)
   "Refresh the current buffer to activate applied colors.
@@ -1686,15 +1693,8 @@ The colors are determined by the `face-foreground' and
   :group 'pdf-view
   :lighter " Thm"
   (pdf-util-assert-pdf-buffer)
-  (cond
-   (pdf-view-themed-minor-mode
-    (add-hook 'after-save-hook #'pdf-view-set-theme-background nil t)
-    (add-hook 'after-revert-hook #'pdf-view-set-theme-background nil t))
-   (t
-    (remove-hook 'after-save-hook #'pdf-view-set-theme-background t)
-    (remove-hook 'after-revert-hook #'pdf-view-set-theme-background t)
-    (pdf-info-setoptions :render/usecolors 0)))
-  (pdf-view-refresh-themed-buffer pdf-view-themed-minor-mode))
+  (pdf-view--update-render-options)
+  (pdf-view-refresh-themed-buffer))
 
 (when pdf-view-use-unicode-ligther
   ;; This check uses an implementation detail, which hopefully gets the

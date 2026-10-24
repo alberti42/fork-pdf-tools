@@ -314,3 +314,33 @@ middle of a redisplay."
     (should-not (pdf-info-epdfinfo-version-problem "1.2.3"))
     (should-not (pdf-info-epdfinfo-version-problem "1.3.0"))
     (should (eq 'newer (pdf-info-epdfinfo-version-problem "2.0.0")))))
+
+(ert-deftest pdf-info-render-options-per-request ()
+  (pdf-test-with-test-pdf
+    (let ((plain (pdf-info-renderpage 1 100))
+          themed)
+      (pdf-info-set-render-options '(:render/usecolors 1
+                                     :render/foreground "#ffffff"
+                                     :render/background "#000000"))
+      (setq themed (pdf-info-renderpage 1 100))
+      (should-not (equal plain themed))
+      ;; The options came with the request; the server keeps none.
+      (should (equal 0 (plist-get (pdf-info-getoptions) :render/usecolors)))
+      ;; A new server renders the same image.
+      (pdf-info-quit)
+      (pdf-info-process-assert-running t)
+      (should (equal themed (pdf-info-renderpage 1 100)))
+      (pdf-info-set-render-options nil)
+      (should (equal plain (pdf-info-renderpage 1 100))))))
+
+(ert-deftest pdf-info-render-options-older-server ()
+  (with-temp-buffer
+    (let (sent)
+      (cl-letf (((symbol-function 'pdf-info--render-options-per-request-p)
+                 #'ignore)
+                ((symbol-function 'pdf-info-setoptions)
+                 (lambda (_file &rest options) (setq sent options))))
+        (pdf-info-set-render-options '(:render/usecolors 1))
+        (should (equal sent '(:render/usecolors 1)))
+        (should (equal pdf-info-render-options '(:render/usecolors 1)))
+        (should-not (pdf-info--render-option-args nil))))))

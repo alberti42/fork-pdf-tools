@@ -26,6 +26,12 @@
 - epdfinfo reports its version, 1.0.0, with the new ~version~ command and with =epdfinfo --version=.  It is a semantic version of the protocol between epdfinfo and the Lisp files, separate from the version of the package.
 - When the server starts, pdf-tools compares it with ~pdf-info-epdfinfo-version~.  If the program is older, or has a higher major number, Emacs warns once per session and uses the program anyway.  An epdfinfo without the ~version~ command counts as older than 1.0.0.
 - =M-x pdf-tools-install= offers to rebuild an older epdfinfo.  If you decline, or the build fails, PDF Tools is activated with the older program.
+- epdfinfo 1.1.0 takes the render options with each render request; see the next section.  =server/CHANGELOG.md= lists the changes of each version of epdfinfo.
+
+** Render options sent with each page
+- The colors of ~pdf-view-themed-minor-mode~ and ~pdf-view-midnight-minor-mode~, and the look of ~pdf-view-printer-minor-mode~, are sent with each request that renders a page, instead of being stored in epdfinfo.  A page renders the same after the server is restarted; it used to lose the colors.  With an epdfinfo older than 1.1.0 they are stored in the server as before.
+- Turning ~pdf-view-midnight-minor-mode~ off while ~pdf-view-themed-minor-mode~ is on shows the theme's colors; it used to show the original colors.  While both are on, the midnight colors apply.
+- New buffer-local variable ~pdf-info-render-options~ holds the render options of a buffer; set it with ~pdf-info-set-render-options~.
 
 ** Functionality improvements and fixes
 - The mouse wheel and the trackpad scroll by what they report, with ~pdf-roll-wheel-scroll~
