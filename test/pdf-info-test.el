@@ -317,6 +317,10 @@ middle of a redisplay."
 
 (ert-deftest pdf-info-quit-keeps-unsaved-changes ()
   (pdf-test-with-test-pdf
+    ;; Visiting the file runs `pdf-view-mode' only if an earlier test
+    ;; added it to `auto-mode-alist'.
+    (unless (derived-mode-p 'pdf-view-mode)
+      (pdf-view-mode))
     (set-buffer-modified-p t)
     (when (get-buffer "*Warnings*")
       (kill-buffer "*Warnings*"))
