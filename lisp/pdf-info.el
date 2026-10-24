@@ -1035,21 +1035,35 @@ restart it."
         (tq-close pdf-info--queue))
       (set (make-local-variable 'pdf-info--queue) nil)
       (pdf-info-process-assert-running t)
-      (add-hook 'kill-buffer-hook #'pdf-info-kill-local-server nil t)
+      (add-hook 'kill-buffer-hook #'pdf-info--kill-local-server-with-buffer
+                nil t)
       pdf-info--queue)))
 
-(defun pdf-info-kill-local-server (&optional buffer)
+(defun pdf-info-kill-local-server (&optional buffer force)
   "Kill the local server in BUFFER.
 
-A No-op, if BUFFER has not running server instance."
+A No-op, if BUFFER has not running server instance.
+
+The local server holds the unsaved changes of BUFFER only, if any.
+Do not kill it while BUFFER is a PDF buffer with unsaved changes;
+display a warning instead.  With FORCE non-nil, kill it without this
+check.  Return non-nil if the server was killed."
   (save-current-buffer
     (when buffer
       (set-buffer buffer))
-    (when (local-variable-p 'pdf-info--queue)
-      ;; A local server, e.g. of a search, never edits a document.
+    (when (and (local-variable-p 'pdf-info--queue)
+               (or force
+                   (pdf-info-check-unsaved-pdf-buffers
+                    (list (current-buffer)))))
       (pdf-info-kill t)
       (kill-local-variable 'pdf-info--queue)
       t)))
+
+(defun pdf-info--kill-local-server-with-buffer ()
+  "Kill the local server of the buffer being killed.
+Killing a modified buffer has asked already whether to discard its
+changes."
+  (pdf-info-kill-local-server nil t))
 
 (defun pdf-info-local-server-p (&optional buffer)
   "Return non-nil, if BUFFER has a running server instance."
@@ -1497,17 +1511,19 @@ The size is in PDF points."
        (eq (process-status (pdf-info-process))
            'run)))
 
-(defun pdf-info-unsaved-pdf-buffers ()
-  "Return the PDF buffers with unsaved changes.
+(defun pdf-info-unsaved-pdf-buffers (&optional buffers)
+  "Return the PDF buffers among BUFFERS with unsaved changes.
 
-Their changes, e.g. edited annotations, exist only in the epdfinfo
-server until the buffer is saved."
+BUFFERS defaults to all buffers.  The changes, e.g. edited
+annotations, exist only in the epdfinfo server until the buffer is
+saved."
   (cl-remove-if-not
    (lambda (buffer)
-     (and (buffer-modified-p buffer)
+     (and (buffer-live-p buffer)
+          (buffer-modified-p buffer)
           (with-current-buffer buffer
             (derived-mode-p 'pdf-view-mode))))
-   (buffer-list)))
+   (or buffers (buffer-list))))
 
 (defun pdf-info--buffer-link (buffer)
   "Return the name of BUFFER as a link that shows BUFFER."
@@ -1526,12 +1542,12 @@ server until the buffer is saved."
                 'keymap map
                 'help-echo "mouse-2, RET: show this buffer")))
 
-(defun pdf-info-check-unsaved-pdf-buffers ()
-  "Return non-nil if no PDF buffer has unsaved changes.
+(defun pdf-info-check-unsaved-pdf-buffers (&optional buffers)
+  "Return non-nil if no PDF buffer among BUFFERS has unsaved changes.
 
-Otherwise display a warning naming those buffers, each a link to
-the buffer, and return nil."
-  (let ((buffers (pdf-info-unsaved-pdf-buffers)))
+BUFFERS defaults to all buffers.  Otherwise display a warning naming
+those buffers, each a link to the buffer, and return nil."
+  (let ((buffers (pdf-info-unsaved-pdf-buffers buffers)))
     (if (null buffers)
         t
       (display-warning

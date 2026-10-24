@@ -340,12 +340,18 @@ middle of a redisplay."
     ;; FORCE quits.
     (should (pdf-info-quit nil t))
     (should-not (pdf-info-running-p))
-    ;; A local server is killed although the buffer is modified.
+    ;; A local server is killed although another buffer is modified.
     (with-temp-buffer
       (pdf-info-make-local-server)
       (should (pdf-info-running-p))
       (should (pdf-info-kill-local-server))
-      (should-not (local-variable-p 'pdf-info--queue)))))
+      (should-not (local-variable-p 'pdf-info--queue)))
+    ;; Not the local server of the modified buffer itself, unless forced.
+    (pdf-info-make-local-server)
+    (should-not (pdf-info-kill-local-server))
+    (should (local-variable-p 'pdf-info--queue))
+    (should (pdf-info-kill-local-server nil t))
+    (should-not (local-variable-p 'pdf-info--queue))))
 
 (ert-deftest pdf-info-render-options-per-request ()
   (pdf-test-with-test-pdf
