@@ -22,11 +22,11 @@
 #include <poppler.h>
 #include <png.h>
 
-/* The version of the protocol spoken by this server, in semantic
-   versioning: the major number changes when a reply changes shape, the
-   minor number when a command is added, the patch number for a fix.
-   pdf-info.el compares it with `pdf-info-epdfinfo-version'; keep the
-   two equal. */
+/* The version of the protocol spoken by this server, in Semantic
+   Versioning 2.0.0: the major number changes when a reply changes
+   shape, the minor number when a command is added, the patch number for
+   a fix.  pdf-info.el compares it with `pdf-info-epdfinfo-version'; keep
+   the two equal, and record each version in server/CHANGELOG.md. */
 #define EPDFINFO_VERSION "1.0.0"
 
 /* Some library functions print warnings to stdout, inhibit it. */

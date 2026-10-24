@@ -97,8 +97,9 @@
 (defconst pdf-info-epdfinfo-version "1.0.0"
   "The version of epdfinfo these Lisp files expect.
 
-It is a semantic version, equal to EPDFINFO_VERSION in
-server/epdfinfo.h.  A server works with these files if its major
+It is a version in Semantic Versioning 2.0.0, equal to
+EPDFINFO_VERSION in server/epdfinfo.h; server/CHANGELOG.md lists
+the changes of each version.  A server works with these files if its major
 number is the same and its version is not lower than this one.")
 
 (defcustom pdf-info-epdfinfo-error-filename nil
