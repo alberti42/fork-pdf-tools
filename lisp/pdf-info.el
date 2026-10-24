@@ -435,7 +435,12 @@ the transmission-queue and arguments to the callback."
   (let* ((query (concat (mapconcat #'pdf-info-query--escape
                                    (cons cmd args) ":")
                         "\n"))
-         (callback
+         retried callback
+         response status done
+         (closure (or pdf-info-asynchronous
+                      (lambda (s r)
+                        (setq status s response r done t)))))
+    (setq callback
           (lambda (closure response)
             (cl-destructuring-bind (status &rest result)
                 ;; `tq' removes this request before calling us and catches
@@ -445,14 +450,25 @@ the transmission-queue and arguments to the callback."
                     (prog1 (pdf-info-query--parse-response cmd response)
                       (pdf-info-query--log response))
                   (error (cons 'error (error-message-string err))))
-              (let* (pdf-info-asynchronous)
-                (if (functionp closure)
-                    (funcall closure status result)
-                  (apply (car closure) status result (cdr closure)))))))
-         response status done
-         (closure (or pdf-info-asynchronous
-                      (lambda (s r)
-                        (setq status s response r done t)))))
+              (let ((open (and (eq status 'error)
+                               (not retried)
+                               (pdf-info--reopen-query result))))
+                (if open
+                    ;; The server opened an encrypted document without its
+                    ;; password: a new server, or the document was closed.
+                    ;; Open it with the password a buffer keeps, then ask
+                    ;; again; `tq' answers in the order it sends.
+                    (progn
+                      (setq retried t)
+                      (pdf-info-query--log open t)
+                      (tq-enqueue pdf-info--queue open "^\\.\n" nil #'ignore)
+                      (pdf-info-query--log query t)
+                      (tq-enqueue pdf-info--queue query "^\\.\n"
+                                  closure callback))
+                  (let* (pdf-info-asynchronous)
+                    (if (functionp closure)
+                        (funcall closure status result)
+                      (apply (car closure) status result (cdr closure)))))))))
     (pdf-info-query--log query t)
     (tq-enqueue
      pdf-info--queue query "^\\.\n" closure callback)
@@ -1114,6 +1130,36 @@ each part of it, and must close the document before the file changes."
       (list 'text 'squiggly 'underline 'strike-out 'highlight))
      (t (list 'text)))))
 
+(defvar-local pdf-info-document-passwords nil
+  "The passwords of the encrypted documents this buffer opened.
+
+An alist of (FILE . PASSWORD).  `pdf-info-open' adds to it.  When the
+server opens FILE again without its password -- a new server, or the
+document was closed -- `pdf-info-query' opens it with PASSWORD and
+repeats the request.  The passwords go when the buffer is killed.")
+
+(defun pdf-info--document-password (file)
+  "Return the password of the document FILE that a buffer keeps, or nil."
+  (cl-some (lambda (buffer)
+             (cdr (assoc file (buffer-local-value
+                               'pdf-info-document-passwords buffer))))
+           (buffer-list)))
+
+(defun pdf-info--reopen-query (error-message)
+  "Return the query that opens a document again, or nil.
+
+ERROR-MESSAGE is the error of a request.  If it says the server could
+not open an encrypted document whose password a buffer keeps, return
+the query opening it with that password."
+  (when (string-match "\\`Error opening \\(.*\\):Document is encrypted\\'"
+                      error-message)
+    (let* ((file (match-string 1 error-message))
+           (password (pdf-info--document-password file)))
+      (when password
+        (concat (mapconcat #'pdf-info-query--escape
+                           (list 'open file password) ":")
+                "\n")))))
+
 (defun pdf-info-open (&optional file-or-buffer password)
   "Open the document FILE-OR-BUFFER using PASSWORD.
 
@@ -1121,11 +1167,18 @@ Generally, documents are opened and closed automatically on
 demand, so this function is rarely needed, unless a PASSWORD is
 set on the document.
 
-Manually opened documents are never closed automatically."
+Manually opened documents are never closed automatically.
 
-  (pdf-info-query
-   'open (pdf-info--normalize-file-or-buffer file-or-buffer)
-   password))
+If the document opens with PASSWORD, the buffer FILE-OR-BUFFER, or
+the current buffer, keeps it in `pdf-info-document-passwords'."
+  (let ((file (pdf-info--normalize-file-or-buffer file-or-buffer)))
+    (prog1 (pdf-info-query 'open file password)
+      (when password
+        (with-current-buffer (if (bufferp file-or-buffer)
+                                 file-or-buffer
+                               (current-buffer))
+          (setf (alist-get file pdf-info-document-passwords nil nil #'equal)
+                password))))))
 
 (defun pdf-info-close (&optional file-or-buffer)
   "Close the document FILE-OR-BUFFER.
