@@ -34,6 +34,7 @@
 - New buffer-local variable ~pdf-info-render-options~ holds the render options of a buffer; set it with ~pdf-info-set-render-options~.
 
 ** Functionality improvements and fixes
+- An encrypted document keeps working after epdfinfo is restarted, and after its buffer was hidden for ~pdf-view-close-idle-documents-after~ minutes and the document closed.  Requests used to fail with "Document is encrypted".  The buffer keeps the password in ~pdf-info-document-passwords~ until it is killed; when a request fails because the document needs its password, pdf-tools opens the document with it and sends the request again.
 - The mouse wheel and the trackpad scroll by what they report, with ~pdf-roll-wheel-scroll~
   + Without ~pixel-scroll-precision-mode~, the pixels of a gesture add up and the page moves by whole lines; a gentle trackpad gesture, which macOS reports as no line at all, used to do nothing.
   + With it, each event scrolls its pixels exactly, the momentum after a flick included; scrolling up across a page used to jump to the top of the document.

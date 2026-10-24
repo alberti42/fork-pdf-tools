@@ -368,3 +368,29 @@ middle of a redisplay."
         (should (equal sent '(:render/usecolors 1)))
         (should (equal pdf-info-render-options '(:render/usecolors 1)))
         (should-not (pdf-info--render-option-args nil))))))
+
+(ert-deftest pdf-info-reopen-encrypted-document ()
+  (pdf-test-with-encrypted-pdf
+    (pdf-info-open nil "pdftool")
+    (should (= 6 (pdf-info-number-of-pages)))
+    ;; A new server opens the document with the password the buffer keeps.
+    (pdf-info-quit)
+    (pdf-info-process-assert-running t)
+    (should (= 6 (pdf-info-number-of-pages)))
+    ;; So does a request after the document was closed.
+    (pdf-info-close)
+    (should (= 6 (pdf-info-number-of-pages)))
+    ;; And an asynchronous request.
+    (pdf-info-close)
+    (let (answer)
+      (let ((pdf-info-asynchronous
+             (lambda (status result) (setq answer (list status result)))))
+        (pdf-info-number-of-pages))
+      (with-timeout (5 (ert-fail "No answer"))
+        (while (null answer)
+          (accept-process-output (pdf-info-process) 0.05)))
+      (should (equal answer '(nil 6))))
+    ;; Without a password, the error comes through.
+    (pdf-info-close)
+    (setq pdf-info-document-passwords nil)
+    (should-error (pdf-info-number-of-pages))))
