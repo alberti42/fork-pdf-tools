@@ -3357,6 +3357,11 @@ cmd_synctex_backward_search (const epdfinfo_t *ctx, const command_arg_t *args)
 }
 
 
+static gboolean
+render_options_from_args (const epdfinfo_t *ctx, const document_t *doc,
+                          int nargs, char * const *args,
+                          render_options_t *render, gchar **error_msg);
+
 const command_arg_type_t cmd_renderpage_spec[] =
   {
     ARG_DOC,
@@ -3385,12 +3390,15 @@ cmd_renderpage (const epdfinfo_t *ctx, const command_arg_t *args)
   double line_width = 1.5;
   PopplerSelectionStyle selection_style = POPPLER_SELECTION_GLYPH;
   PopplerRectangle cb = {0.0, 0.0, 1.0, 1.0};
+  render_options_t render;
   int i = 0;
 
   perror_if_not (page, "No such page %d", pn);
+  perror_if_not (render_options_from_args (ctx, doc, nrest_args, rest_args,
+                                           &render, &error_msg),
+                 "%s", error_msg);
   poppler_page_get_size (page, &pt_width, &pt_height);
-  surface = image_render_page (doc->pdf, page, width, 1,
-                               &doc->options.render);
+  surface = image_render_page (doc->pdf, page, width, 1, &render);
   perror_if_not (surface, "Failed to render page %d", pn);
 
   if (! nrest_args)
@@ -3412,8 +3420,11 @@ cmd_renderpage (const epdfinfo_t *ctx, const command_arg_t *args)
       perror_if_not (i < nrest_args, "Keyword is `%s' missing an argument",
                      keyword);
 
-      if (! strcmp (keyword, ":foreground")
-          || ! strcmp (keyword, ":background"))
+      if (g_str_has_prefix (keyword, ":render/"))
+        /* Read by render_options_from_args. */
+        ++i;
+      else if (! strcmp (keyword, ":foreground")
+               || ! strcmp (keyword, ":background"))
         {
           perror_if_not (command_arg_parse_arg (ctx, rest_args[i], &rest_arg,
                                                 ARG_COLOR, &error_msg),
@@ -3562,7 +3573,7 @@ const command_arg_type_t cmd_boundingbox_spec[] =
   {
     ARG_DOC,
     ARG_NATNUM,                 /* page number */
-    /* region */
+    ARG_REST,                   /* render options */
   };
 
 static void
@@ -3576,12 +3587,17 @@ cmd_boundingbox (const epdfinfo_t *ctx, const command_arg_t *args)
   double pt_width, pt_height;
   unsigned char *data, *data_p;
   PopplerRectangle bbox;
+  render_options_t render;
+  gchar *error_msg = NULL;
   int i, j;
 
   perror_if_not (page, "No such page %d", pn);
   poppler_page_get_size (page, &pt_width, &pt_height);
-  surface = image_render_page (doc->pdf, page, (int) pt_width, 1,
-                               &doc->options.render);
+  perror_if_not (render_options_from_args (ctx, doc, args[2].value.rest.nargs,
+                                           args[2].value.rest.args,
+                                           &render, &error_msg),
+                 "%s", error_msg);
+  surface = image_render_page (doc->pdf, page, (int) pt_width, 1, &render);
 
   perror_if_not (cairo_surface_status(surface) == CAIRO_STATUS_SUCCESS,
                 "Failed to render page");
@@ -3661,6 +3677,7 @@ cmd_boundingbox (const epdfinfo_t *ctx, const command_arg_t *args)
   OK_END ();
 
  error:
+  if (error_msg) g_free (error_msg);
   if (surface) cairo_surface_destroy (surface);
   if (page) g_object_unref (page);
 }
@@ -3746,6 +3763,53 @@ const document_option_t document_options [] =
     DEC_DOPT (":render/gammabeforeinvert", ARG_BOOL, render.gammabeforeinvert),
   };
 
+/* Parse VALUE as the value of the document option KEY into OPTS.
+   Return FALSE and set ERROR_MSG if KEY is unknown or VALUE invalid. */
+static gboolean
+document_option_parse (const epdfinfo_t *ctx, const char *key,
+                       const char *value, document_options_t *opts,
+                       gchar **error_msg)
+{
+  int j;
+
+  for (j = 0; j < G_N_ELEMENTS (document_options); ++j)
+    {
+      const document_option_t *dopt = &document_options[j];
+      command_arg_t arg;
+
+      if (strcmp (key, dopt->name))
+        continue;
+      if (! command_arg_parse_arg (ctx, value, &arg, dopt->type, error_msg))
+        return FALSE;
+      memcpy (((char*) opts) + dopt->offset,
+              &arg.value, command_arg_type_size (arg.type));
+      return TRUE;
+    }
+  *error_msg = g_strdup_printf ("Unknown option: %s", key);
+  return FALSE;
+}
+
+/* Set RENDER to the render options of DOC, overridden by the
+   ":render/" key value pairs among the NARGS ARGS of a request.  Other
+   pairs are left to the caller.  Return FALSE and set ERROR_MSG on an
+   invalid pair. */
+static gboolean
+render_options_from_args (const epdfinfo_t *ctx, const document_t *doc,
+                          int nargs, char * const *args,
+                          render_options_t *render, gchar **error_msg)
+{
+  document_options_t opts = doc->options;
+  int i;
+
+  for (i = 0; i + 1 < nargs; i += 2)
+    if (g_str_has_prefix (args[i], ":render/")
+        && ! document_option_parse (ctx, args[i], args[i + 1], &opts,
+                                    error_msg))
+      return FALSE;
+  *render = opts.render;
+  return TRUE;
+}
+
 const command_arg_type_t cmd_getoptions_spec[] =
   {
     ARG_DOC,
@@ -3787,36 +3851,13 @@ cmd_setoptions(const epdfinfo_t *ctx, const command_arg_t *args)
   char * const *rest = args[1].value.rest.args;
   gchar *error_msg = NULL;
   document_options_t opts = doc->options;
-  const size_t nopts = G_N_ELEMENTS (document_options);
 
   perror_if_not (nrest % 2 == 0, "Even number of key/value pairs expected");
 
-  while (i < nrest)
-    {
-      int j;
-      command_arg_t key, value;
-
-      perror_if_not (command_arg_parse_arg
-                     (ctx, rest[i], &key, ARG_NONEMPTY_STRING, &error_msg),
-                     "%s", error_msg);
-
-      ++i;
-      for (j = 0; j < nopts; ++j)
-        {
-          const document_option_t *dopt = &document_options[j];
-          if (! strcmp (key.value.string, dopt->name))
-            {
-              perror_if_not (command_arg_parse_arg
-                             (ctx, rest[i], &value, dopt->type, &error_msg),
-                             "%s", error_msg);
-              memcpy (((char*) &opts) + dopt->offset,
-                      &value.value, command_arg_type_size (value.type));
-              break;
-            }
-        }
-      perror_if_not (j < nopts, "Unknown option: %s", key.value.string);
-      ++i;
-    }
+  for (i = 0; i < nrest; i += 2)
+    perror_if_not (document_option_parse (ctx, rest[i], rest[i + 1], &opts,
+                                          &error_msg),
+                   "%s", error_msg);
   doc->options = opts;
   cmd_getoptions (ctx, args);
 

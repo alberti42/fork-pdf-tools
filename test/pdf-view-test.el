@@ -559,3 +559,25 @@ and so does one whose file changed on disk."
                      image-flip-vertically image-crop image-cut))
     (should (eq (command-remapping command nil pdf-view-mode-map)
                 'undefined))))
+
+(ert-deftest pdf-view-render-options-from-modes ()
+  (with-temp-buffer
+    (let ((pdf-view-printer-minor-mode nil)
+          (pdf-view-midnight-minor-mode nil)
+          (pdf-view-themed-minor-mode nil)
+          (pdf-view-midnight-colors '("#aaaaaa" . "#111111"))
+          (pdf-view-midnight-invert nil))
+      (should (equal (pdf-view--render-options)
+                     '(:render/printed nil :render/usecolors 0)))
+      (setq pdf-view-themed-minor-mode t
+            pdf-view-midnight-minor-mode t
+            pdf-view-printer-minor-mode t)
+      (let ((options (pdf-view--render-options)))
+        (should (eq t (plist-get options :render/printed)))
+        (should (equal "#aaaaaa" (plist-get options :render/foreground)))
+        (should (equal 1 (plist-get options :render/usecolors))))
+      (setq pdf-view-midnight-minor-mode nil)
+      (let ((options (pdf-view--render-options)))
+        (should (equal (face-foreground 'default nil)
+                       (plist-get options :render/foreground)))
+        (should (equal 1 (plist-get options :render/usecolors)))))))

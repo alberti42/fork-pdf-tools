@@ -17,6 +17,17 @@ changes the server.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-24
+
+### Added
+
+- `renderpage` and `boundingbox` take the `:render/` options of
+  `setoptions` as key value pairs after their other arguments.  They
+  apply to that request only and take precedence over the options set
+  with `setoptions`, which stay as they are.  pdf-tools sends them with
+  each render, so a new server renders a document as the previous one
+  did.
+
 ## [1.0.0] - 2026-10-24
 
 The first version with a number.  Builds before it have no `version`
