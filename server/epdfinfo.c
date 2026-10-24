@@ -3862,6 +3862,22 @@ cmd_ping (const epdfinfo_t *ctx, const command_arg_t *args)
   OK_END ();
 }
 
+/* Name: version
+   Args: None
+   Returns: EPDFINFO_VERSION.
+   Errors: None
+*/
+
+const command_arg_type_t cmd_version_spec[] = {};
+
+static void
+cmd_version (const epdfinfo_t *ctx, const command_arg_t *args)
+{
+  OK_BEGIN ();
+  print_response_string (EPDFINFO_VERSION, NEWLINE);
+  OK_END ();
+}
+
 
 /* ================================================================== *
  * Main
@@ -3871,6 +3887,7 @@ static const command_t commands [] =
   {
     /* Basic */
     DEC_CMD (ping),
+    DEC_CMD (version),
     DEC_CMD (features),
     DEC_CMD (open),
     DEC_CMD (close),
@@ -3942,9 +3959,14 @@ int main(int argc, char **argv)
   _setmode(_fileno(stdout), _O_BINARY);
 #endif
 
+  if (argc == 2 && ! strcmp (argv[1], "--version"))
+    {
+      printf ("epdfinfo %s\n", EPDFINFO_VERSION);
+      exit (EXIT_SUCCESS);
+    }
   if (argc > 2)
     {
-      fprintf(stderr, "usage: epdfinfo [ERROR-LOGFILE]\n");
+      fprintf(stderr, "usage: epdfinfo [--version | ERROR-LOGFILE]\n");
       exit (EXIT_FAILURE);
     }
   if (argc == 2)

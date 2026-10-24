@@ -293,3 +293,24 @@ middle of a redisplay."
               (should (string-prefix-p (number-to-string page)
                                        (pdf-info-gettext page '(0 0 1 1)))))))
       (delete-directory dir t))))
+
+(ert-deftest pdf-info-epdfinfo-version-matches-server ()
+  "`pdf-info-epdfinfo-version' equals EPDFINFO_VERSION in the server."
+  (with-temp-buffer
+    (insert-file-contents "../server/epdfinfo.h")
+    (should (re-search-forward
+             "^#define EPDFINFO_VERSION \"\\([^\"]+\\)\"" nil t))
+    (should (equal (match-string 1) pdf-info-epdfinfo-version))))
+
+(ert-deftest pdf-info-epdfinfo-program-version ()
+  (should (equal (pdf-info-epdfinfo-program-version)
+                 pdf-info-epdfinfo-version)))
+
+(ert-deftest pdf-info-epdfinfo-version-problem ()
+  (let ((pdf-info-epdfinfo-version "1.2.3"))
+    (should (eq 'older (pdf-info-epdfinfo-version-problem nil)))
+    (should (eq 'older (pdf-info-epdfinfo-version-problem "0.9.9")))
+    (should (eq 'older (pdf-info-epdfinfo-version-problem "1.2.2")))
+    (should-not (pdf-info-epdfinfo-version-problem "1.2.3"))
+    (should-not (pdf-info-epdfinfo-version-problem "1.3.0"))
+    (should (eq 'newer (pdf-info-epdfinfo-version-problem "2.0.0")))))

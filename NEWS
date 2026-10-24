@@ -22,6 +22,11 @@
 - Saving no longer closes the document: the pages on screen, their images and the names of the annotations stay valid, and nothing is rendered again.
 - The document of a buffer that has shown in no window for ~pdf-view-close-idle-documents-after~ minutes is closed, unless the buffer has unsaved changes or its file changed on disk; the next request opens it again.
 
+** epdfinfo has a version
+- epdfinfo reports its version, 1.0.0, with the new ~version~ command and with =epdfinfo --version=.  It is a semantic version of the protocol between epdfinfo and the Lisp files, separate from the version of the package.
+- When the server starts, pdf-tools compares it with ~pdf-info-epdfinfo-version~.  If the program is older, or has a higher major number, Emacs warns once per session and uses the program anyway.  An epdfinfo without the ~version~ command counts as older than 1.0.0.
+- =M-x pdf-tools-install= offers to rebuild an older epdfinfo.  If you decline, or the build fails, PDF Tools is activated with the older program.
+
 ** Functionality improvements and fixes
 - The mouse wheel and the trackpad scroll by what they report, with ~pdf-roll-wheel-scroll~
   + Without ~pixel-scroll-precision-mode~, the pixels of a gesture add up and the page moves by whole lines; a gentle trackpad gesture, which macOS reports as no line at all, used to do nothing.
