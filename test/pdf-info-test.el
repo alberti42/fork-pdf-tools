@@ -334,13 +334,11 @@ middle of a redisplay."
       (should (equal plain (pdf-info-renderpage 1 100))))))
 
 (ert-deftest pdf-info-render-options-older-server ()
-  (with-temp-buffer
-    (let (sent)
-      (cl-letf (((symbol-function 'pdf-info--render-options-per-request-p)
-                 #'ignore)
-                ((symbol-function 'pdf-info-setoptions)
-                 (lambda (_file &rest options) (setq sent options))))
-        (pdf-info-set-render-options '(:render/usecolors 1))
-        (should (equal sent '(:render/usecolors 1)))
-        (should (equal pdf-info-render-options '(:render/usecolors 1)))
-        (should-not (pdf-info--render-option-args nil))))))
+  (pdf-test-with-test-pdf
+    ;; A server older than 1.1.0 keeps the options of the document.
+    (cl-letf (((symbol-function 'pdf-info--render-options-per-request-p)
+               #'ignore))
+      (pdf-info-set-render-options '(:render/usecolors 1))
+      (should (equal pdf-info-render-options '(:render/usecolors 1)))
+      (should (equal 1 (plist-get (pdf-info-getoptions) :render/usecolors)))
+      (should-not (pdf-info--render-option-args nil)))))

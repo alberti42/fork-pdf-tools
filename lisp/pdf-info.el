@@ -1858,7 +1858,7 @@ request."
   (with-current-buffer (or buffer (current-buffer))
     (setq pdf-info-render-options options)
     (unless (pdf-info--render-options-per-request-p)
-      (apply #'pdf-info-setoptions nil options))))
+      (apply #'pdf-info-setoptions (current-buffer) options))))
 
 (defun pdf-info--option-args (options)
   "Return the document OPTIONS, a plist, as arguments for the server."
