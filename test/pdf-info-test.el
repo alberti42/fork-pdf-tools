@@ -314,3 +314,23 @@ middle of a redisplay."
     (should-not (pdf-info-epdfinfo-version-problem "1.2.3"))
     (should-not (pdf-info-epdfinfo-version-problem "1.3.0"))
     (should (eq 'newer (pdf-info-epdfinfo-version-problem "2.0.0")))))
+
+(ert-deftest pdf-info-quit-keeps-unsaved-changes ()
+  (pdf-test-with-test-pdf
+    (set-buffer-modified-p t)
+    (when (get-buffer "*Warnings*")
+      (kill-buffer "*Warnings*"))
+    ;; Interactively, a modified PDF buffer keeps the server running.
+    (pdf-info-quit nil t)
+    (should (pdf-info-running-p))
+    (with-current-buffer "*Warnings*"
+      (goto-char (point-min))
+      (should (search-forward (buffer-name (car (pdf-info-unsaved-pdf-buffers)))
+                              nil t))
+      (let ((pdf-buffer (car (pdf-info-unsaved-pdf-buffers))))
+        (funcall (lookup-key (get-text-property (1- (point)) 'keymap)
+                             (kbd "RET")))
+        (should (eq (window-buffer (selected-window)) pdf-buffer))))
+    ;; From Lisp, it quits.
+    (pdf-info-quit)
+    (should-not (pdf-info-running-p))))
