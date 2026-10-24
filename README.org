@@ -632,7 +632,7 @@ Please complete the following information:
 :END:
 Have you upgraded ~poppler~ recently? This can cause ~epdfinfo~ to stop working, since it was compiled with the previous version of ~poppler~. Just run =M-x pdf-tools-install= and this should be fixed.
 
-After an update of ~pdf-tools~, Emacs may warn that the ~epdfinfo~ program is older than these Lisp files expect. ~pdf-tools~ keeps using it, without the fixes made since. Run =M-x pdf-tools-install=, answer yes to the rebuild, then restart Emacs.
+After an update of ~pdf-tools~, Emacs may warn that the ~epdfinfo~ program is older than these Lisp files expect. ~pdf-tools~ keeps using it, without the fixes made since. Run =M-x pdf-tools-install= and answer yes to the rebuild; when the build has finished, it offers to restart the server with the new program. =M-x pdf-info-restart-server= restarts it at any other time.
 
 ** PDFs are not rendering well!
 :PROPERTIES:

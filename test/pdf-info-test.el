@@ -392,3 +392,19 @@ middle of a redisplay."
     (pdf-info-close)
     (setq pdf-info-document-passwords nil)
     (should-error (pdf-info-number-of-pages))))
+
+(ert-deftest pdf-info-restart-server ()
+  (pdf-test-with-test-pdf
+    (unless (derived-mode-p 'pdf-view-mode)
+      (pdf-view-mode))
+    (let ((pid (process-id (pdf-info-process))))
+      ;; Unsaved changes keep the server.
+      (set-buffer-modified-p t)
+      (pdf-info-restart-server)
+      (should (eq pid (process-id (pdf-info-process))))
+      ;; Otherwise a new server runs, and the buffer goes on with it.
+      (set-buffer-modified-p nil)
+      (pdf-info-restart-server)
+      (should (pdf-info-running-p))
+      (should-not (eq pid (process-id (pdf-info-process))))
+      (should (= 6 (pdf-info-number-of-pages))))))
