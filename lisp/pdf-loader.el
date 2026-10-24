@@ -32,6 +32,50 @@
   (copy-sequence "%PDF")
   "The item used in`magic-mode-alist'.")
 
+(defcustom pdf-tools-warn-about-large-files nil
+  "Whether Emacs asks before opening a large PDF file.
+
+Emacs asks for confirmation before opening a file larger than
+`large-file-warning-threshold'.  If this is nil, it does not ask
+for a PDF file that PDF Tools displays: one whose name ends in
+\".pdf\", or whose content starts with \"%PDF\".  Other files are
+not affected."
+  :group 'pdf-tools
+  :type 'boolean)
+
+(defun pdf-loader--pdf-file-p (filename)
+  "Return non-nil if FILENAME is a PDF file PDF Tools displays."
+  (or (string-match-p pdf-loader--auto-mode-alist-item filename)
+      (and (not (file-remote-p filename))
+           (ignore-errors
+             (with-temp-buffer
+               (set-buffer-multibyte nil)
+               (insert-file-contents-literally
+                filename nil 0 (length pdf-loader--magic-mode-alist-item))
+               (equal (buffer-string) pdf-loader--magic-mode-alist-item))))))
+
+(defun pdf-loader--skip-large-file-warning
+    (orig-fun size op-type filename &rest args)
+  "`:around' advice for `abort-if-file-too-large'.
+
+Do not ask before opening FILENAME if it is a PDF file and
+`pdf-tools-warn-about-large-files' is nil.  Otherwise call
+ORIG-FUN with SIZE, OP-TYPE, FILENAME and ARGS."
+  (unless (and (not pdf-tools-warn-about-large-files)
+               (equal op-type "open")
+               (pdf-loader--pdf-file-p filename))
+    (apply orig-fun size op-type filename args)))
+
+(defun pdf-loader--add-large-file-advice ()
+  "Install `pdf-loader--skip-large-file-warning'."
+  (advice-add 'abort-if-file-too-large :around
+              #'pdf-loader--skip-large-file-warning))
+
+(defun pdf-loader--remove-large-file-advice ()
+  "Remove `pdf-loader--skip-large-file-warning'."
+  (advice-remove 'abort-if-file-too-large
+                 #'pdf-loader--skip-large-file-warning))
+
 
 (declare-function pdf-tools-install "pdf-tools.el")
 
@@ -48,6 +92,8 @@ The arguments are passed verbatim to `pdf-tools-install', which
 see."
   (let ((args (list no-query-p skip-dependencies-p
                     no-error-p force-dependencies-p)))
+    ;; Emacs asks about a large file before the file loads PDF Tools.
+    (pdf-loader--add-large-file-advice)
     (if (featurep 'pdf-tools)
         (apply #'pdf-tools-install args)
       (pdf-loader--install

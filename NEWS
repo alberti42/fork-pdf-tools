@@ -40,6 +40,7 @@
 
 ** Changes to options and commands
 - ~pdf-view-continuous~ is renamed ~pdf-view-turn-page-at-top-and-bottom~, which says what it does: scrolling past the bottom or the top of a page turns the page.  The old name is an obsolete alias.
+- Emacs no longer asks for confirmation before opening a PDF file larger than ~large-file-warning-threshold~.  This applies to a file whose name ends in =.pdf= or whose content starts with =%PDF=, also when PDF Tools is loaded by ~pdf-loader-install~.  New option ~pdf-tools-warn-about-large-files~, nil by default; set it to t to have Emacs ask again.
 - New option ~pdf-view-render-asynchronously~, see above.
 - New option ~pdf-view-close-idle-documents-after~, 30 minutes by default; nil keeps documents open until their buffer is killed.
 - New option ~pdf-view-page-key-lines~, 5 by default: PageDown and PageUp scroll that many lines in the continuous view instead of turning the page; nil restores turning it.  In ~pdf-view-single-page-mode~ they turn the page.
