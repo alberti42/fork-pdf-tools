@@ -94,6 +94,13 @@
   "Filename of the epdfinfo executable."
   :type 'file)
 
+(defconst pdf-info-epdfinfo-version "1.0.0"
+  "The version of epdfinfo these Lisp files expect.
+
+It is a semantic version, equal to EPDFINFO_VERSION in
+server/epdfinfo.h.  A server works with these files if its major
+number is the same and its version is not lower than this one.")
+
 (defcustom pdf-info-epdfinfo-error-filename nil
   "Filename for error output of the epdfinfo executable.
 
@@ -268,6 +275,66 @@ Returns nil."
     (message "The epdfinfo program appears to be working."))
   nil)
 
+(defun pdf-info-epdfinfo-program-version ()
+  "Return the version of `pdf-info-epdfinfo-program', as a string.
+
+Return nil if the program has no `version' command, i.e. it is
+older than version 1.0.0."
+  (let ((default-directory (expand-file-name "~/")))
+    (with-temp-buffer
+      (apply #'call-process-region "version\nquit\n" nil
+             pdf-info-epdfinfo-program nil t nil
+             (when pdf-info-epdfinfo-error-filename
+               (list pdf-info-epdfinfo-error-filename)))
+      (goto-char (point-min))
+      (when (looking-at "OK\n\\(.+\\)\n\\.\n")
+        (match-string 1)))))
+
+(defun pdf-info-epdfinfo-version-problem (version)
+  "Compare the epdfinfo VERSION with `pdf-info-epdfinfo-version'.
+
+VERSION is a string, or nil for a program older than 1.0.0.
+Return `older' if the program is older than these Lisp files
+expect, `newer' if its major number is higher, and nil if it
+works with these files."
+  (cond
+   ((or (null version)
+        (version< version pdf-info-epdfinfo-version))
+    'older)
+   ((> (car (version-to-list version))
+       (car (version-to-list pdf-info-epdfinfo-version)))
+    'newer)))
+
+(defvar pdf-info--epdfinfo-version-warned nil
+  "The (PROGRAM . VERSION) pairs warned about in this session.")
+
+(defun pdf-info-check-epdfinfo-version ()
+  "Warn if `pdf-info-epdfinfo-program' is not the version expected.
+
+Warn once per program and version in a session.  The program is
+used anyway."
+  (let* ((version (pdf-info-epdfinfo-program-version))
+         (problem (pdf-info-epdfinfo-version-problem version))
+         (key (cons pdf-info-epdfinfo-program version)))
+    (when (and problem
+               (not (member key pdf-info--epdfinfo-version-warned)))
+      (push key pdf-info--epdfinfo-version-warned)
+      (display-warning
+       'pdf-tools
+       (if (eq problem 'older)
+           (format "The epdfinfo program %s is %s, but these Lisp files \
+expect version %s.  PDF Tools uses it anyway, without the fixes made \
+since.  Rebuild it with `M-x pdf-tools-install', then restart Emacs."
+                   pdf-info-epdfinfo-program
+                   (if version (concat "version " version)
+                     "older than version 1.0.0")
+                   pdf-info-epdfinfo-version)
+         (format "The epdfinfo program %s is version %s, but these Lisp \
+files expect version %s, a lower major version.  Update the pdf-tools \
+package."
+                 pdf-info-epdfinfo-program version
+                 pdf-info-epdfinfo-version))))))
+
 (defun pdf-info-process-assert-running (&optional force)
   "Assert a running process.
 
@@ -299,6 +366,7 @@ error."
         (setq pdf-info-restart-process-p nil))
       (error "The epdfinfo server quit"))
     (pdf-info-check-epdfinfo)
+    (pdf-info-check-epdfinfo-version)
     (let* ((process-connection-type)    ;Avoid 4096 Byte bug #12440.
            (default-directory "~")
            (proc (apply #'start-process

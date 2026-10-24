@@ -373,6 +373,10 @@ appear to be working, attempt to rebuild it.  If this build
 succeeded, continue with the activation of the package.
 Otherwise fail silently, i.e. no error is signaled.
 
+If the program works but is older than `pdf-info-epdfinfo-version',
+offer to rebuild it, and activate the package with the older
+program if the build is declined or fails.
+
 Build the program (if necessary) without asking first, if
 NO-QUERY-P is non-nil.
 
@@ -394,31 +398,56 @@ value (e.g. ~/bin/epdfinfo) before calling this function.
 
 See `pdf-view-mode' and `pdf-tools-enabled-modes'."
   (interactive)
-  (if (or (pdf-info-running-p)
-          (ignore-errors (pdf-info-check-epdfinfo) t))
-      (pdf-tools-install-noverify)
-    (let ((target-directory
-           (or (and (stringp pdf-info-epdfinfo-program)
-                    (file-name-directory
-                     pdf-info-epdfinfo-program))
-               pdf-tools-directory)))
-      (if (or no-query-p
-              (y-or-n-p "Need to (re)build the epdfinfo program, do it now ?"))
-          (pdf-tools-build-server
-           target-directory
-           skip-dependencies-p
-           force-dependencies-p
-           (lambda (executable)
-             (let ((msg (format
-                         "Building the PDF Tools server %s"
-                         (if executable "succeeded" "failed"))))
-               (if (not executable)
-                   (funcall (if no-error-p #'message #'error) "%s" msg)
-                 (message "%s" msg)
-                 (setq pdf-info-epdfinfo-program executable)
-                 (let ((pdf-info-restart-process-p t))
-                   (pdf-tools-install-noverify))))))
-        (message "PDF Tools not activated")))))
+  (let* ((working (or (pdf-info-running-p)
+                      (ignore-errors (pdf-info-check-epdfinfo) t)))
+         (version (and working (pdf-info-epdfinfo-program-version)))
+         ;; An older program still works: offer to rebuild it, but
+         ;; activate PDF Tools with it if the user declines or the
+         ;; build fails.
+         (older (and working
+                     (eq (pdf-info-epdfinfo-version-problem version)
+                         'older))))
+    (if (and working (not older))
+        (pdf-tools-install-noverify)
+      (let ((target-directory
+             (or (and (stringp pdf-info-epdfinfo-program)
+                      (file-name-directory
+                       pdf-info-epdfinfo-program))
+                 pdf-tools-directory)))
+        (if (or no-query-p
+                (y-or-n-p
+                 (if older
+                     (format "The epdfinfo program is %s, these Lisp files \
+expect version %s; rebuild it now ?"
+                             (if version (concat "version " version)
+                               "older than version 1.0.0")
+                             pdf-info-epdfinfo-version)
+                   "Need to (re)build the epdfinfo program, do it now ?")))
+            (pdf-tools-build-server
+             target-directory
+             skip-dependencies-p
+             force-dependencies-p
+             (lambda (executable)
+               (let ((msg (format
+                           "Building the PDF Tools server %s"
+                           (if executable "succeeded" "failed"))))
+                 (cond
+                  (executable
+                   (message "%s%s" msg
+                            (if (pdf-info-running-p)
+                                "; restart Emacs to use it"
+                              ""))
+                   (setq pdf-info-epdfinfo-program executable)
+                   (let ((pdf-info-restart-process-p t))
+                     (pdf-tools-install-noverify)))
+                  (older
+                   (message "%s; using the older epdfinfo program" msg)
+                   (pdf-tools-install-noverify))
+                  (t
+                   (funcall (if no-error-p #'message #'error) "%s" msg))))))
+          (if older
+              (pdf-tools-install-noverify)
+            (message "PDF Tools not activated")))))))
 
 (defun pdf-tools-install-noverify ()
   "Like `pdf-tools-install', but skip checking `pdf-info-epdfinfo-program'."
