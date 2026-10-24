@@ -37,3 +37,23 @@
         (dolist (id '(link-1-1 annot-1-1))
           (funcall (lookup-key (current-local-map) (vector id 'mouse-1))))
         (should (equal '(annotation link) acted))))))
+
+(ert-deftest pdf-tools-offer-restart-after-build ()
+  (let (asked restarted (noninteractive nil))
+    (cl-letf (((symbol-function 'pdf-info-running-p) (lambda () t))
+              ((symbol-function 'y-or-n-p) (lambda (_) (setq asked t) t))
+              ((symbol-function 'pdf-info-restart-server)
+               (lambda () (setq restarted t))))
+      ;; No question with a PDF buffer unsaved.
+      (cl-letf (((symbol-function 'pdf-info-check-unsaved-pdf-buffers)
+                 #'ignore))
+        (pdf-tools--offer-restart "Built" nil)
+        (should-not (or asked restarted)))
+      (cl-letf (((symbol-function 'pdf-info-check-unsaved-pdf-buffers)
+                 (lambda () t)))
+        ;; No question when told not to ask.
+        (pdf-tools--offer-restart "Built" t)
+        (should-not (or asked restarted))
+        ;; Otherwise ask, and restart on yes.
+        (pdf-tools--offer-restart "Built" nil)
+        (should (and asked restarted))))))

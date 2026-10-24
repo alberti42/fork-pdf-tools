@@ -330,7 +330,8 @@ used anyway.  Return the version of the program, as
        (if (eq problem 'older)
            (format "The epdfinfo program %s is %s, but these Lisp files \
 expect version %s.  PDF Tools uses it anyway, without the fixes made \
-since.  Rebuild it with `M-x pdf-tools-install', then restart Emacs."
+since.  Rebuild it with `M-x pdf-tools-install', which offers to restart \
+the server with the new program."
                    pdf-info-epdfinfo-program
                    (if version (concat "version " version)
                      "older than version 1.0.0")
@@ -1569,6 +1570,23 @@ quit without this check."
     (when (processp (pdf-info-process))
       (tq-close pdf-info--queue))
     (setq pdf-info--queue nil)))
+
+(defun pdf-info-restart-server ()
+  "Quit the epdfinfo server and start `pdf-info-epdfinfo-program' again.
+
+Use it to run a newly built epdfinfo without restarting Emacs.  Open
+PDF buffers go on with the new server: each request carries the
+buffer's render options, and an encrypted document is opened again
+with the password its buffer keeps.
+
+Do not restart while a PDF buffer has unsaved changes, which would be
+lost; display a warning naming those buffers instead."
+  (interactive)
+  (when (pdf-info-check-unsaved-pdf-buffers)
+    (pdf-info-quit)
+    (pdf-info-process-assert-running t)
+    (message "Restarted the epdfinfo server, version %s"
+             (or pdf-info--server-version "older than 1.0.0"))))
 
 (defun pdf-info-kill ()
   "Kill the epdfinfo server.

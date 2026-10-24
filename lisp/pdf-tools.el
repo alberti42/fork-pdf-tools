@@ -434,13 +434,10 @@ expect version %s; rebuild it now ?"
                            (if executable "succeeded" "failed"))))
                  (cond
                   (executable
-                   (message "%s%s" msg
-                            (if (pdf-info-running-p)
-                                "; restart Emacs to use it"
-                              ""))
                    (setq pdf-info-epdfinfo-program executable)
                    (let ((pdf-info-restart-process-p t))
-                     (pdf-tools-install-noverify)))
+                     (pdf-tools-install-noverify))
+                   (pdf-tools--offer-restart msg no-query-p))
                   (older
                    (message "%s; using the older epdfinfo program" msg)
                    (pdf-tools-install-noverify))
@@ -449,6 +446,26 @@ expect version %s; rebuild it now ?"
           (if older
               (pdf-tools-install-noverify)
             (message "PDF Tools not activated")))))))
+
+(defun pdf-tools--offer-restart (msg no-query-p)
+  "Report MSG about a finished build, and offer to restart the server.
+
+A running server still runs the program built before.  Ask whether
+to restart it, unless NO-QUERY-P is non-nil; while a PDF buffer has
+unsaved changes, warn about them instead of asking."
+  (cond
+   ((not (pdf-info-running-p))
+    (message "%s" msg))
+   ((or no-query-p noninteractive)
+    (message "%s; run `M-x pdf-info-restart-server' to use it" msg))
+   ((not (pdf-info-check-unsaved-pdf-buffers))
+    (message "%s; save the PDF buffers in *Warnings*, then run \
+`M-x pdf-info-restart-server' to use it" msg))
+   ((y-or-n-p (format "%s.  Restart the epdfinfo server now to use it ? "
+                      msg))
+    (pdf-info-restart-server))
+   (t
+    (message "%s; run `M-x pdf-info-restart-server' to use it" msg))))
 
 (defun pdf-tools-install-noverify ()
   "Like `pdf-tools-install', but skip checking `pdf-info-epdfinfo-program'."

@@ -26,6 +26,7 @@
 - epdfinfo reports its version, 1.0.0, with the new ~version~ command and with =epdfinfo --version=.  It is a semantic version of the protocol between epdfinfo and the Lisp files, separate from the version of the package.
 - When the server starts, pdf-tools compares it with ~pdf-info-epdfinfo-version~.  If the program is older, or has a higher major number, Emacs warns once per session and uses the program anyway.  An epdfinfo without the ~version~ command counts as older than 1.0.0.
 - =M-x pdf-tools-install= offers to rebuild an older epdfinfo.  If you decline, or the build fails, PDF Tools is activated with the older program.
+- When the build has finished and a server is running, =M-x pdf-tools-install= asks whether to restart the server with the new program, unless a PDF buffer has unsaved changes.  New command ~pdf-info-restart-server~ restarts it at any time.  Open PDF buffers go on with the new server, with their colors and the passwords of encrypted documents.
 - epdfinfo 1.1.0 takes the render options with each render request; see the next section.  =server/CHANGELOG.md= lists the changes of each version of epdfinfo.
 
 ** Render options sent with each page
