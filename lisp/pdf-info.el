@@ -1046,7 +1046,8 @@ A No-op, if BUFFER has not running server instance."
     (when buffer
       (set-buffer buffer))
     (when (local-variable-p 'pdf-info--queue)
-      (pdf-info-kill)
+      ;; A local server, e.g. of a search, never edits a document.
+      (pdf-info-kill t)
       (kill-local-variable 'pdf-info--queue)
       t)))
 
@@ -1541,20 +1542,21 @@ or restarted while PDF buffers have unsaved changes: "
                ".  Visit each of them and save it, revert it, or kill it."))
       nil)))
 
-(defun pdf-info-quit (&optional timeout interactive-p)
+(defun pdf-info-quit (&optional timeout force)
   "Quit the epdfinfo server.
 
 This blocks until all outstanding requests are answered.  Unless
 TIMEOUT is non-nil, in which case we wait at most TIMEOUT seconds
 before killing the server.
 
-Called interactively, i.e. with INTERACTIVE-P non-nil, do not
-quit while a PDF buffer has unsaved changes, which would be lost;
-display a warning naming those buffers instead.  Called from Lisp,
-quit without this check."
-  (interactive (list nil t))
+Do not quit while a PDF buffer has unsaved changes, which exist only
+in the server and would be lost; display a warning naming those
+buffers instead.  With FORCE non-nil, quit without this check.
+
+Return non-nil if the server quit or was not running."
+  (interactive)
   (cl-check-type timeout (or null number))
-  (when (or (not interactive-p)
+  (when (or force
             (not (pdf-info-running-p))
             (pdf-info-check-unsaved-pdf-buffers))
     (when (pdf-info-running-p)
@@ -1569,7 +1571,8 @@ quit without this check."
             (accept-process-output (pdf-info-process) 0.5 nil t)))))
     (when (processp (pdf-info-process))
       (tq-close pdf-info--queue))
-    (setq pdf-info--queue nil)))
+    (setq pdf-info--queue nil)
+    t))
 
 (defun pdf-info-restart-server ()
   "Quit the epdfinfo server and start `pdf-info-epdfinfo-program' again.
@@ -1582,20 +1585,29 @@ with the password its buffer keeps.
 Do not restart while a PDF buffer has unsaved changes, which would be
 lost; display a warning naming those buffers instead."
   (interactive)
-  (when (pdf-info-check-unsaved-pdf-buffers)
-    (pdf-info-quit)
+  (when (pdf-info-quit)
     (pdf-info-process-assert-running t)
     (message "Restarted the epdfinfo server, version %s"
              (or pdf-info--server-version "older than 1.0.0"))))
 
-(defun pdf-info-kill ()
+(defun pdf-info-kill (&optional force)
   "Kill the epdfinfo server.
 
 Immediately delete the server process, see also `pdf-info-quit',
-for a more sane way to exit the program."
-  (when (processp (pdf-info-process))
-    (tq-close pdf-info--queue))
-  (setq pdf-info--queue nil))
+for a more sane way to exit the program.
+
+Do not kill it while a PDF buffer has unsaved changes, which exist
+only in the server and would be lost; display a warning naming those
+buffers instead.  With FORCE non-nil, kill it without this check.
+
+Return non-nil if the server was killed or was not running."
+  (when (or force
+            (not (pdf-info-running-p))
+            (pdf-info-check-unsaved-pdf-buffers))
+    (when (processp (pdf-info-process))
+      (tq-close pdf-info--queue))
+    (setq pdf-info--queue nil)
+    t))
 
 (defun pdf-info-getannots (&optional pages file-or-buffer)
   "Return the annotations on PAGE.

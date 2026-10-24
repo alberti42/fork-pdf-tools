@@ -498,8 +498,7 @@ Do nothing while a PDF buffer has unsaved changes, which quitting
 the server would lose; display a warning naming those buffers
 instead."
   (interactive)
-  (when (pdf-info-check-unsaved-pdf-buffers)
-    (pdf-info-quit)
+  (when (pdf-info-quit)
     (setq-default auto-mode-alist
                   (remove pdf-tools-auto-mode-alist-entry auto-mode-alist))
     (setq-default magic-mode-alist
