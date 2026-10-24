@@ -1436,26 +1436,80 @@ The size is in PDF points."
        (eq (process-status (pdf-info-process))
            'run)))
 
-(defun pdf-info-quit (&optional timeout)
+(defun pdf-info-unsaved-pdf-buffers ()
+  "Return the PDF buffers with unsaved changes.
+
+Their changes, e.g. edited annotations, exist only in the epdfinfo
+server until the buffer is saved."
+  (cl-remove-if-not
+   (lambda (buffer)
+     (and (buffer-modified-p buffer)
+          (with-current-buffer buffer
+            (derived-mode-p 'pdf-view-mode))))
+   (buffer-list)))
+
+(defun pdf-info--buffer-link (buffer)
+  "Return the name of BUFFER as a link that shows BUFFER."
+  (let ((map (make-sparse-keymap))
+        (show (lambda ()
+                (interactive)
+                (if (buffer-live-p buffer)
+                    (pop-to-buffer buffer)
+                  (message "That buffer no longer exists")))))
+    (define-key map (kbd "RET") show)
+    (define-key map [mouse-2] show)
+    (propertize (buffer-name buffer)
+                'face 'link
+                'mouse-face 'highlight
+                'follow-link t
+                'keymap map
+                'help-echo "mouse-2, RET: show this buffer")))
+
+(defun pdf-info-check-unsaved-pdf-buffers ()
+  "Return non-nil if no PDF buffer has unsaved changes.
+
+Otherwise display a warning naming those buffers, each a link to
+the buffer, and return nil."
+  (let ((buffers (pdf-info-unsaved-pdf-buffers)))
+    (if (null buffers)
+        t
+      (display-warning
+       'pdf-tools
+       (concat "To prevent accidental data loss, epdfinfo cannot be quit \
+or restarted while PDF buffers have unsaved changes: "
+               (mapconcat #'pdf-info--buffer-link buffers ", ")
+               ".  Visit each of them and save it, revert it, or kill it."))
+      nil)))
+
+(defun pdf-info-quit (&optional timeout interactive-p)
   "Quit the epdfinfo server.
 
 This blocks until all outstanding requests are answered.  Unless
 TIMEOUT is non-nil, in which case we wait at most TIMEOUT seconds
-before killing the server."
+before killing the server.
+
+Called interactively, i.e. with INTERACTIVE-P non-nil, do not
+quit while a PDF buffer has unsaved changes, which would be lost;
+display a warning naming those buffers instead.  Called from Lisp,
+quit without this check."
+  (interactive (list nil t))
   (cl-check-type timeout (or null number))
-  (when (pdf-info-running-p)
-    (let ((pdf-info-asynchronous
-           (if timeout (lambda (&rest _))
-             pdf-info-asynchronous)))
-      (pdf-info-query 'quit)
-      (when timeout
-        (setq timeout (+ (float-time) (max 0 timeout)))
-        (while (and (pdf-info-running-p)
-                    (> timeout (float-time)))
-          (accept-process-output (pdf-info-process) 0.5 nil t)))))
-  (when (processp (pdf-info-process))
-    (tq-close pdf-info--queue))
-  (setq pdf-info--queue nil))
+  (when (or (not interactive-p)
+            (not (pdf-info-running-p))
+            (pdf-info-check-unsaved-pdf-buffers))
+    (when (pdf-info-running-p)
+      (let ((pdf-info-asynchronous
+             (if timeout (lambda (&rest _))
+               pdf-info-asynchronous)))
+        (pdf-info-query 'quit)
+        (when timeout
+          (setq timeout (+ (float-time) (max 0 timeout)))
+          (while (and (pdf-info-running-p)
+                      (> timeout (float-time)))
+            (accept-process-output (pdf-info-process) 0.5 nil t)))))
+    (when (processp (pdf-info-process))
+      (tq-close pdf-info--queue))
+    (setq pdf-info--queue nil)))
 
 (defun pdf-info-kill ()
   "Kill the epdfinfo server.

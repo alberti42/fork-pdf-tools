@@ -475,22 +475,27 @@ expect version %s; rebuild it now ?"
           (pdf-view-mode))))))
 
 (defun pdf-tools-uninstall ()
-  "Uninstall PDF-Tools in all current and future PDF buffers."
+  "Uninstall PDF-Tools in all current and future PDF buffers.
+
+Do nothing while a PDF buffer has unsaved changes, which quitting
+the server would lose; display a warning naming those buffers
+instead."
   (interactive)
-  (pdf-info-quit)
-  (setq-default auto-mode-alist
-                (remove pdf-tools-auto-mode-alist-entry auto-mode-alist))
-  (setq-default magic-mode-alist
-                (remove pdf-tools-magic-mode-alist-entry magic-mode-alist))
-  (pdf-loader--remove-large-file-advice)
-  (pdf-occur-global-minor-mode -1)
-  (pdf-virtual-global-minor-mode -1)
-  (remove-hook 'pdf-view-mode-hook #'pdf-tools-enable-minor-modes)
-  (dolist (buf (buffer-list))
-    (with-current-buffer buf
-      (when (pdf-util-pdf-buffer-p buf)
-        (pdf-tools-disable-minor-modes pdf-tools-modes)
-        (normal-mode)))))
+  (when (pdf-info-check-unsaved-pdf-buffers)
+    (pdf-info-quit)
+    (setq-default auto-mode-alist
+                  (remove pdf-tools-auto-mode-alist-entry auto-mode-alist))
+    (setq-default magic-mode-alist
+                  (remove pdf-tools-magic-mode-alist-entry magic-mode-alist))
+    (pdf-loader--remove-large-file-advice)
+    (pdf-occur-global-minor-mode -1)
+    (pdf-virtual-global-minor-mode -1)
+    (remove-hook 'pdf-view-mode-hook #'pdf-tools-enable-minor-modes)
+    (dolist (buf (buffer-list))
+      (with-current-buffer buf
+        (when (pdf-util-pdf-buffer-p buf)
+          (pdf-tools-disable-minor-modes pdf-tools-modes)
+          (normal-mode))))))
 
 (defun pdf-tools-pdf-buffer-p (&optional buffer)
   "Check if the current buffer is a PDF document.
