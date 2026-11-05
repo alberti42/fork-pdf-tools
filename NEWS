@@ -41,6 +41,7 @@
   + With it, each event scrolls its pixels exactly, the momentum after a flick included; scrolling up across a page used to jump to the top of the document.
 - ~SPC~, ~S-SPC~ and ~DEL~ scroll a screen in the continuous view; in 1.3.0 roll mode they scrolled one line.
 - Isearch no longer signals "Invalid image specification" when it wraps backward.
+- A PDF whose place saveplace-pdf-view saved is restored when an Emacs daemon restores a desktop before any graphical frame exists.  The buffer used to fail to restore with "Window system frame should be used"; the saved page and origin are now restored once the buffer shows in a window that can display images.
 - A page whose width is capped by ~pdf-view-max-image-width~ keeps its proportions.
 - A page is shown at the same height whichever cached image it is drawn from.
 - After a save, text on the pages on screen can be selected and their annotations clicked; the pages stayed inert until redrawn.
