@@ -342,6 +342,7 @@ os_msys2() {
                       mingw-w64-x86_64-poppler
                       mingw-w64-x86_64-imagemagick
                       mingw-w64-x86_64-toolchain
+                      mingw-w64-x86_64-pkgconf
                       mingw-w64-x86_64-openssl
                       mingw-w64-x86_64-zlib" ;;
         MINGW32)
@@ -352,6 +353,7 @@ os_msys2() {
                       mingw-w64-i686-poppler
                       mingw-w64-i686-imagemagick
                       mingw-w64-i686-toolchain
+                      mingw-w64-i686-pkgconf
                       mingw-w64-i686-openssl
                       mingw-w64-i686-zlib" ;;
         UCRT64)
@@ -362,6 +364,7 @@ os_msys2() {
                       mingw-w64-ucrt-x86_64-poppler
                       mingw-w64-ucrt-x86_64-imagemagick
                       mingw-w64-ucrt-x86_64-toolchain
+                      mingw-w64-ucrt-x86_64-pkgconf
                       mingw-w64-ucrt-x86_64-openssl
                       mingw-w64-ucrt-x86_64-zlib" ;;
         MSYS)

@@ -136,6 +136,7 @@ jobs:
             autoconf
             automake
             mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-pkgconf
             mingw-w64-ucrt-x86_64-libpng
             mingw-w64-ucrt-x86_64-poppler
             mingw-w64-ucrt-x86_64-imagemagick
