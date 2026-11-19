@@ -188,6 +188,33 @@ document the server holds."
     (let ((pdf-view--allow-doc-view-mode t))
       (should-not (pdf-view--refuse-doc-view-mode)))))
 
+(ert-deftest pdf-view-leaving-the-mode-restores-the-document ()
+  "Another major mode gets the PDF, not the placeholder text, and no revert
+function or render of pdf-view."
+  (pdf-test-with-test-pdf
+    (unless (derived-mode-p 'pdf-view-mode)
+      (pdf-view-mode))
+    (switch-to-buffer (current-buffer))
+    (pdf-roll-new-window-function)
+    (goto-char (point-min))
+    (should-not (looking-at "%PDF"))
+    (let ((rendered nil)
+          (request (list 1 (selected-window) 100 pdf-view--document-generation)))
+      (cl-letf (((symbol-function 'pdf-view--render-finish)
+                 (lambda (&rest _) (setq rendered t))))
+        (pdf-view--render-finish-later request)
+        (fundamental-mode)
+        (goto-char (point-min))
+        (should (looking-at "%PDF"))
+        (should-not (buffer-modified-p))
+        (should-not (cl-some #'pdf-roll--own-overlay-p
+                             (overlays-in (point-min) (point-max))))
+        (should-not (eq revert-buffer-function #'pdf-view-revert-buffer))
+        (should (pdf-tools-pdf-buffer-p))
+        ;; Run the timer the render left.
+        (sit-for 0.01)
+        (should-not rendered)))))
+
 (ert-deftest pdf-view-save-a-pdf-inside-a-tar ()
   "Saving a PDF that lives in a tar puts it back into the archive."
   (skip-unless (executable-find "tar"))

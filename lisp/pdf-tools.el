@@ -469,6 +469,7 @@ unsaved changes, warn about them instead of asking."
 
 (defun pdf-tools-install-noverify ()
   "Like `pdf-tools-install', but skip checking `pdf-info-epdfinfo-program'."
+  (setq pdf-info--restart-declined nil)
   (add-to-list 'auto-mode-alist pdf-tools-auto-mode-alist-entry)
   (add-to-list 'magic-mode-alist pdf-tools-magic-mode-alist-entry)
   (pdf-loader--add-large-file-advice)
