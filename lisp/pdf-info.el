@@ -124,7 +124,10 @@ will be logged to the buffer \"*pdf-info-log*\"."
 This variable has no effect if `pdf-info-log' is nil."
   :type 'integer)
 
-(defcustom pdf-info-restart-process-p 'ask
+(define-obsolete-variable-alias 'pdf-info-restart-process-p
+  'pdf-info-restart-process "1.4.0")
+
+(defcustom pdf-info-restart-process 'ask
   "What to do when the epdfinfo server died.
 
 This should be one of
@@ -351,7 +354,7 @@ unconditionally.
 
 Otherwise, if FORCE is non-nil start it, if it is not running.
 Else restart it with respect to the variable
-`pdf-info-restart-process-p', which see.
+`pdf-info-restart-process', which see.
 
 If getting the process to run fails, this function throws an
 error."
@@ -364,14 +367,14 @@ error."
       (setq pdf-info--queue nil))
     (unless (or force
                 (eq pdf-info--queue t)
-                (and (eq pdf-info-restart-process-p 'ask)
+                (and (eq pdf-info-restart-process 'ask)
                      (not noninteractive)
                      (y-or-n-p "The epdfinfo server quit, restart it ? "))
-                (and pdf-info-restart-process-p
-                     (not (eq pdf-info-restart-process-p 'ask))))
+                (and pdf-info-restart-process
+                     (not (eq pdf-info-restart-process 'ask))))
 
-      (when (eq pdf-info-restart-process-p 'ask)
-        (setq pdf-info-restart-process-p nil))
+      (when (eq pdf-info-restart-process 'ask)
+        (setq pdf-info-restart-process nil))
       (error "The epdfinfo server quit"))
     (pdf-info-check-epdfinfo)
     (setq pdf-info--server-version (pdf-info-check-epdfinfo-version))

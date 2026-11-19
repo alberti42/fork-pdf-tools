@@ -86,7 +86,10 @@ search.  See `pdf-info-normalize-page-range' for its format.")
 (defvar pdf-occur-search-string nil
   "The currently used search string, resp. regexp.")
 
-(defvar pdf-occur-search-regexp-p nil
+(define-obsolete-variable-alias 'pdf-occur-search-regexp-p
+  'pdf-occur-search-is-regexp "1.4.0")
+
+(defvar pdf-occur-search-is-regexp nil
   "Non-nil, if searching for a regexp.")
 
 (defvar pdf-occur-buffer-mode-map
@@ -212,7 +215,7 @@ For a programmatic search of multiple documents see
   (pdf-occur-start-search
    pdf-occur-search-documents
    pdf-occur-search-string
-   pdf-occur-search-regexp-p)
+   pdf-occur-search-is-regexp)
   (pdf-occur-update-header-line)
   (setq mode-line-process
         '(:propertize ":run" face compilation-mode-line-run)))
@@ -223,7 +226,7 @@ For a programmatic search of multiple documents see
 Interactively just restart the search, unless a prefix was given.
 In this case read a new search string.  With `C-u C-u' as prefix
 additionally invert the current state of
-`pdf-occur-search-regexp-p'."
+`pdf-occur-search-is-regexp'."
   (interactive
    (progn
      (pdf-occur-assert-occur-buffer-p)
@@ -231,16 +234,16 @@ additionally invert the current state of
       (current-prefix-arg
        (let ((regexp-p
               (if (equal current-prefix-arg '(16))
-                  (not pdf-occur-search-regexp-p)
-                pdf-occur-search-regexp-p)))
+                  (not pdf-occur-search-is-regexp)
+                pdf-occur-search-is-regexp)))
          (list
           (pdf-occur-read-string regexp-p)
           regexp-p)))
       (t
        (list pdf-occur-search-string
-             pdf-occur-search-regexp-p)))))
+             pdf-occur-search-is-regexp)))))
   (setq pdf-occur-search-string string
-        pdf-occur-search-regexp-p regexp-p)
+        pdf-occur-search-is-regexp regexp-p)
   (when documents
     (setq pdf-occur-search-documents
           (pdf-occur-normalize-documents documents)))
@@ -476,7 +479,7 @@ Returns the window where the buffer is displayed."
     (setq-local pdf-occur-search-documents
                 (pdf-occur-normalize-documents documents))
     (setq-local pdf-occur-search-string string)
-    (setq-local pdf-occur-search-regexp-p regexp-p)
+    (setq-local pdf-occur-search-is-regexp regexp-p)
     (setq-local pdf-occur-search-pages-left 0)
     (setq-local pdf-occur-number-of-matches 0)
     (pdf-occur-revert-buffer)

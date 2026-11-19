@@ -82,7 +82,7 @@ building epdfinfo."
                 default-directory))
       (message "Restarting epdfinfo server")
       (pdf-info-quit)
-      (let ((pdf-info-restart-process-p t))
+      (let ((pdf-info-restart-process t))
         (pdf-info-process-assert-running)))))
 
 (provide 'pdf-dev)

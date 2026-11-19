@@ -97,9 +97,9 @@
 (ert-deftest pdf-info-quit ()
   (pdf-test-with-test-pdf
     (pdf-info-quit nil t)
-    (let (pdf-info-restart-process-p)
+    (let (pdf-info-restart-process)
       (should-error (pdf-info-open)))
-    (let ((pdf-info-restart-process-p t))
+    (let ((pdf-info-restart-process t))
       (pdf-info-open)
       (should (pdf-info-close)))))
 
