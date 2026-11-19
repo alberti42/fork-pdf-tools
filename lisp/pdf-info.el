@@ -135,11 +135,19 @@ nil -- do nothing,
 t   -- automatically restart it or
 ask -- ask whether to restart or not.
 
-If it is `ask', the server quits and you answer no, this variable
-is set to nil."
+If it is `ask' and you answer no, you are not asked again until a
+buffer enters `pdf-view-mode' or you run `pdf-tools-install'; until
+then, a request to the server signals an error."
   :type '(choice (const :tag "Do nothing" nil)
                  (const :tag "Restart silently" t)
                  (const :tag "Always ask" ask)))
+
+(defvar pdf-info--restart-declined nil
+  "Non-nil if you answered no to restarting the epdfinfo server.
+
+While it is non-nil, `pdf-info-process-assert-running' does not ask
+again.  Starting the server, `pdf-view-mode' and `pdf-tools-install' set
+it to nil.")
 
 (defcustom pdf-info-close-document-hook nil
   "A hook ran after a document was closed in the server.
@@ -369,13 +377,15 @@ error."
                 (eq pdf-info--queue t)
                 (and (eq pdf-info-restart-process 'ask)
                      (not noninteractive)
-                     (y-or-n-p "The epdfinfo server quit, restart it ? "))
+                     (not pdf-info--restart-declined)
+                     (or (y-or-n-p "The epdfinfo server quit, restart it ? ")
+                         (progn (setq pdf-info--restart-declined t)
+                                nil)))
                 (and pdf-info-restart-process
                      (not (eq pdf-info-restart-process 'ask))))
-
-      (when (eq pdf-info-restart-process 'ask)
-        (setq pdf-info-restart-process nil))
-      (error "The epdfinfo server quit"))
+      (error "The epdfinfo server quit; M-x pdf-info-restart-server \
+starts it"))
+    (setq pdf-info--restart-declined nil)
     (pdf-info-check-epdfinfo)
     (setq pdf-info--server-version (pdf-info-check-epdfinfo-version))
     (let* ((process-connection-type)    ;Avoid 4096 Byte bug #12440.

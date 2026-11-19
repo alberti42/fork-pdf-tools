@@ -103,6 +103,31 @@
       (pdf-info-open)
       (should (pdf-info-close)))))
 
+(ert-deftest pdf-info-restart-declined-asks-once ()
+  "After a no, the server is not restarted and the question not asked again.
+The option keeps its value, and starting the server asks again next time."
+  (pdf-test-with-test-pdf
+    (let ((pdf-info-restart-process 'ask)
+          (pdf-info--restart-declined nil)
+          (noninteractive nil)
+          (asked 0))
+      (cl-letf (((symbol-function 'y-or-n-p)
+                 (lambda (&rest _) (cl-incf asked) nil)))
+        (pdf-info-quit nil t)
+        (should-error (pdf-info-process-assert-running))
+        (should (= asked 1))
+        (should (string-match-p
+                 "pdf-info-restart-server"
+                 (cadr (should-error (pdf-info-process-assert-running)))))
+        (should (= asked 1))
+        (should (eq pdf-info-restart-process 'ask))
+        (pdf-info-process-assert-running t)
+        (should-not pdf-info--restart-declined)
+        (pdf-info-quit nil t)
+        (should-error (pdf-info-process-assert-running))
+        (should (= asked 2))
+        (pdf-info-process-assert-running t)))))
+
 (ert-deftest pdf-info-getannots ()
   (skip-unless (pdf-info-writable-annotations-p))
   (pdf-test-with-test-pdf

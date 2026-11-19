@@ -490,6 +490,8 @@ PNG images in Emacs buffers."
   :group 'pdf-view
   :abbrev-table nil
   :syntax-table nil
+  ;; Visiting a PDF asks again whether to restart a server that quit.
+  (setq pdf-info--restart-declined nil)
   ;; Setup a local copy for remote files.
   (when (and (or jka-compr-really-do-compress
                  (let ((file-name-handler-alist nil))
@@ -597,6 +599,10 @@ PNG images in Emacs buffers."
   ;; change is refused.
   (add-hook 'change-major-mode-hook
             #'pdf-view--refuse-mode-change-when-modified -100 t)
+  (add-hook 'change-major-mode-hook
+            #'pdf-view--restore-file-contents -90 t)
+  (add-hook 'change-major-mode-hook
+            #'pdf-view--forget-revert-function nil t)
   (add-hook 'kill-buffer-hook 'pdf-view-close-document nil t)
   (setq pdf-view--last-shown (current-time))
   (pdf-view--start-idle-timer)
@@ -749,6 +755,32 @@ and per margin, over the file.  The error stops the mode change before
   (when (buffer-modified-p)
     (user-error "%s has unsaved changes; save or revert it before \
 leaving PDF View mode" (buffer-name))))
+
+(defun pdf-view--restore-file-contents ()
+  "Put the contents of the visited file back into the buffer.
+
+For `change-major-mode-hook', after
+`pdf-view--refuse-mode-change-when-modified', so the buffer has no
+unsaved changes.  The buffer text is a space and a newline per page and
+per margin; the next major mode gets the document instead.  It matters
+for `doc-view-mode', which takes the buffer text as the document, and
+for `pdf-tools-install', which looks for %PDF at the start of the
+buffer.  A buffer that visits no file keeps its text."
+  (when (and buffer-file-name
+             (file-readable-p buffer-file-name))
+    (let ((inhibit-read-only t))
+      (remove-overlays nil nil 'category 'pdf-roll)
+      (remove-overlays nil nil 'category 'pdf-roll-margin)
+      (insert-file-contents buffer-file-name t nil nil t))))
+
+(defun pdf-view--forget-revert-function ()
+  "Remove `pdf-view-revert-buffer' from the buffer.
+
+For `change-major-mode-hook'.  `revert-buffer-function' is a permanent
+local variable, so without this `revert-buffer' would go on calling
+`pdf-view-revert-buffer', and the server, in the next major mode."
+  (when (eq revert-buffer-function #'pdf-view-revert-buffer)
+    (kill-local-variable 'revert-buffer-function)))
 
 (defun pdf-view--write-contents-function ()
   "Function for `write-contents-functions' to save the buffer.
@@ -1430,7 +1462,10 @@ not be asked anything synchronously, so drawing is left to a timer."
     (run-at-time 0 nil (lambda ()
                          (when (buffer-live-p buffer)
                            (with-current-buffer buffer
-                             (pdf-view--render-finish request)))))))
+                             ;; The buffer may have left the mode,
+                             ;; e.g. with `pdf-tools-uninstall'.
+                             (when (derived-mode-p 'pdf-view-mode)
+                               (pdf-view--render-finish request))))))))
 
 (defun pdf-view--page-up-to-date-p (window page width)
   "Return non-nil if WINDOW shows PAGE drawn WIDTH pixels wide, as it is now.
