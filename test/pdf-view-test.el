@@ -158,6 +158,23 @@ that copy has to be given the saved document too."
         (save-buffer)
         (should (= (+ 2 before) (pdf-view-test-annotation-count (buffer-file-name))))))))
 
+(ert-deftest pdf-view-mode-change-keeps-unsaved-changes ()
+  "A modified buffer stays in `pdf-view-mode'; an unmodified one leaves it.
+
+`doc-view-mode' would save the buffer text over the file, not the
+document the server holds."
+  (pdf-test-with-test-pdf
+    (unless (derived-mode-p 'pdf-view-mode)
+      (pdf-view-mode))
+    (set-buffer-modified-p t)
+    (should-error (doc-view-mode) :type 'user-error)
+    (should-error (fundamental-mode) :type 'user-error)
+    (should (eq major-mode 'pdf-view-mode))
+    (should (memq 'pdf-view--write-contents-function write-contents-functions))
+    (set-buffer-modified-p nil)
+    (fundamental-mode)
+    (should (eq major-mode 'fundamental-mode))))
+
 (ert-deftest pdf-view-save-a-pdf-inside-a-tar ()
   "Saving a PDF that lives in a tar puts it back into the archive."
   (skip-unless (executable-find "tar"))

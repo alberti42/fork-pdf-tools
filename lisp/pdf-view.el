@@ -591,6 +591,10 @@ PNG images in Emacs buffers."
   (add-hook 'deactivate-mark-hook 'pdf-view-deactivate-region nil t)
   (add-hook 'write-contents-functions
             'pdf-view--write-contents-function nil t)
+  ;; First, so that no other function of the hook runs when the mode
+  ;; change is refused.
+  (add-hook 'change-major-mode-hook
+            #'pdf-view--refuse-mode-change-when-modified -100 t)
   (add-hook 'kill-buffer-hook 'pdf-view-close-document nil t)
   (setq pdf-view--last-shown (current-time))
   (pdf-view--start-idle-timer)
@@ -711,6 +715,19 @@ themselves, from `write-contents-functions\', and read the document out of
 the buffer to do it."
   (or (bound-and-true-p tar-subfile-mode)
       (bound-and-true-p archive-subfile-mode)))
+
+(defun pdf-view--refuse-mode-change-when-modified ()
+  "Signal an error if the buffer has unsaved changes.
+
+For `change-major-mode-hook'.  The unsaved changes, e.g. edited
+annotations, exist only in the server until the buffer is saved, and
+only `pdf-view--write-contents-function' saves them.  Another major
+mode would save the buffer text instead, a space and a newline per page
+and per margin, over the file.  The error stops the mode change before
+`kill-all-local-variables' removes that function."
+  (when (buffer-modified-p)
+    (user-error "%s has unsaved changes; save or revert it before \
+leaving PDF View mode" (buffer-name))))
 
 (defun pdf-view--write-contents-function ()
   "Function for `write-contents-functions' to save the buffer.

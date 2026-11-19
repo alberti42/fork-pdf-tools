@@ -46,6 +46,7 @@
 - A page is shown at the same height whichever cached image it is drawn from.
 - After a save, text on the pages on screen can be selected and their annotations clicked; the pages stayed inert until redrawn.
 - ~pdf-view-mode~ turns ~display-line-numbers-mode~ off in its buffers, also under ~global-display-line-numbers-mode~; the hook the README recommended is no longer needed.
+- A PDF buffer with unsaved changes, e.g. edited annotations, which exist only in the server until the buffer is saved, no longer leaves ~pdf-view-mode~; switching to another major mode signals an error until the buffer is saved or reverted.  The buffer used to change mode and keep its "modified" flag, and saving it then wrote the buffer text, a space and a newline per page and per margin, over the file.  ~C-c C-c~, which switches to ~doc-view-mode~, is one way this happened.
 
 ** Changes to options and commands
 - ~pdf-view-continuous~ is renamed ~pdf-view-turn-page-at-top-and-bottom~, which says what it does: scrolling past the bottom or the top of a page turns the page.  The old name is an obsolete alias.
