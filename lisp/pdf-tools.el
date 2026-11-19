@@ -435,7 +435,7 @@ expect version %s; rebuild it now ?"
                  (cond
                   (executable
                    (setq pdf-info-epdfinfo-program executable)
-                   (let ((pdf-info-restart-process-p t))
+                   (let ((pdf-info-restart-process t))
                      (pdf-tools-install-noverify))
                    (pdf-tools--offer-restart msg no-query-p))
                   (older

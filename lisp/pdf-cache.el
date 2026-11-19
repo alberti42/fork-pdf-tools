@@ -514,7 +514,7 @@ WINDOW and IMAGE-WIDTH decide the page and scale of the final image."
              (pdf-cache-prefetch-minor-mode -1)
              (signal (car err) (cdr err)))))))))
 
-(defvar pdf-cache--prefetch-started-p nil
+(defvar pdf-cache--prefetch-started nil
   "Guard against multiple prefetch starts.
 
 Used solely in `pdf-cache--prefetch-start'.")
@@ -522,13 +522,13 @@ Used solely in `pdf-cache--prefetch-start'.")
 (defun pdf-cache--prefetch-start (buffer)
   "Start prefetching images in BUFFER."
   (when (and pdf-cache-prefetch-minor-mode
-             (not pdf-cache--prefetch-started-p)
+             (not pdf-cache--prefetch-started)
              (pdf-util-pdf-buffer-p)
              (not isearch-mode)
              (null pdf-cache--prefetch-pages)
              (eq (window-buffer) buffer)
              (fboundp pdf-cache-prefetch-pages-function))
-    (let* ((pdf-cache--prefetch-started-p t)
+    (let* ((pdf-cache--prefetch-started t)
            (pages (funcall pdf-cache-prefetch-pages-function)))
       (setq pdf-cache--prefetch-pages
             (butlast pages (max 0 (- (length pages)
