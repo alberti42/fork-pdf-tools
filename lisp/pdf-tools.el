@@ -511,7 +511,8 @@ instead."
       (with-current-buffer buf
         (when (pdf-util-pdf-buffer-p buf)
           (pdf-tools-disable-minor-modes pdf-tools-modes)
-          (normal-mode))))))
+          (let ((pdf-view--allow-doc-view-mode t))
+            (normal-mode)))))))
 
 (defun pdf-tools-pdf-buffer-p (&optional buffer)
   "Check if the current buffer is a PDF document.
