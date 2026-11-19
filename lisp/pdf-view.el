@@ -456,8 +456,10 @@ regarding display of the region in the later function.")
     (define-key map (kbd "s c")       'pdf-view-set-slice-common-bounding-box)
     ;; Rotation.
     (define-key map (kbd "R")              #'pdf-view-rotate)
-    ;; Reconvert
-    (define-key map (kbd "C-c C-c")   'doc-view-mode)
+    ;; The commands of the parent `image-mode-map' leave the mode and show
+    ;; the buffer text, a space and a newline per page and per margin.
+    (define-key map (kbd "C-c C-c")   #'undefined)
+    (define-key map (kbd "C-c C-x")   #'undefined)
     (define-key map (kbd "g")         'revert-buffer)
     ;; Region
     (define-key map [down-mouse-1] 'pdf-view-mouse-set-region)
@@ -591,6 +593,10 @@ PNG images in Emacs buffers."
   (add-hook 'deactivate-mark-hook 'pdf-view-deactivate-region nil t)
   (add-hook 'write-contents-functions
             'pdf-view--write-contents-function nil t)
+  ;; First, so that no other function of the hook runs when the mode
+  ;; change is refused.
+  (add-hook 'change-major-mode-hook
+            #'pdf-view--refuse-mode-change-when-modified -100 t)
   (add-hook 'kill-buffer-hook 'pdf-view-close-document nil t)
   (setq pdf-view--last-shown (current-time))
   (pdf-view--start-idle-timer)
@@ -619,6 +625,25 @@ PNG images in Emacs buffers."
 (advice-add 'cua-copy-region
 	        :before-until
 	        #'cua-copy-region--pdf-view-advice)
+
+;; `doc-view-mode' takes the buffer text as the document.
+(advice-add 'doc-view-mode :before #'pdf-view--refuse-doc-view-mode)
+
+(defvar pdf-view--allow-doc-view-mode nil
+  "Non-nil lets `doc-view-mode' run in a PDF View buffer.
+`pdf-tools-uninstall' binds it, to return PDF buffers to the mode
+Emacs would choose without PDF Tools.")
+
+(defun pdf-view--refuse-doc-view-mode (&rest _)
+  "Signal an error if the buffer is in `pdf-view-mode'.
+
+Advice for `doc-view-mode', which takes the buffer text as the
+document.  The text of a PDF View buffer is a space and a newline per
+page and per margin, and a save in `doc-view-mode' writes it over the
+file."
+  (when (and (derived-mode-p 'pdf-view-mode)
+             (not pdf-view--allow-doc-view-mode))
+    (user-error "doc-view-mode is not supported in PDF View buffers")))
 
 (defun cua-copy-region--pdf-view-advice (&rest _)
   "If the current buffer is in `pdf-view' mode, call `pdf-view-kill-ring-save'."
@@ -711,6 +736,19 @@ themselves, from `write-contents-functions\', and read the document out of
 the buffer to do it."
   (or (bound-and-true-p tar-subfile-mode)
       (bound-and-true-p archive-subfile-mode)))
+
+(defun pdf-view--refuse-mode-change-when-modified ()
+  "Signal an error if the buffer has unsaved changes.
+
+For `change-major-mode-hook'.  The unsaved changes, e.g. edited
+annotations, exist only in the server until the buffer is saved, and
+only `pdf-view--write-contents-function' saves them.  Another major
+mode would save the buffer text instead, a space and a newline per page
+and per margin, over the file.  The error stops the mode change before
+`kill-all-local-variables' removes that function."
+  (when (buffer-modified-p)
+    (user-error "%s has unsaved changes; save or revert it before \
+leaving PDF View mode" (buffer-name))))
 
 (defun pdf-view--write-contents-function ()
   "Function for `write-contents-functions' to save the buffer.
